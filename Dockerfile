@@ -39,9 +39,9 @@ RUN apk add --no-cache \
 
 # Download Alist (use TARGETARCH from Buildx)
 RUN set -ex; \
+    mkdir -p /app; \
     if [ "$TARGETARCH" = "amd64" ]; then ALIST_ARCH="amd64"; \
     elif [ "$TARGETARCH" = "arm64" ]; then ALIST_ARCH="arm64"; \
-    elif [ "$TARGETARCH" = "arm" ]; then ALIST_ARCH="armv7"; \
     else echo "Unsupported arch: $TARGETARCH" && exit 1; fi; \
     if [ "$ALIST_VERSION" = "latest" ]; then \
     ALIST_URL="https://github.com/AlistGo/alist/releases/latest/download/alist-linux-musl-${ALIST_ARCH}.tar.gz"; \
