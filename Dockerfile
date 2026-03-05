@@ -17,6 +17,9 @@ LABEL maintainer="workerspages"
 LABEL org.opencontainers.image.source="https://github.com/workerspages/alist-rclone"
 LABEL org.opencontainers.image.description="Alist + Rclone All-in-One with Web Console"
 
+# Target architecture (auto-set by Docker Buildx)
+ARG TARGETARCH
+
 # Versions (override with build args)
 ARG ALIST_VERSION=latest
 ARG RCLONE_VERSION=current
@@ -35,36 +38,29 @@ RUN apk add --no-cache \
     unzip \
     && rm -rf /var/cache/apk/*
 
-# Detect architecture and download Alist
+# Download Alist (use TARGETARCH from Buildx)
 RUN set -ex; \
-    ARCH=$(uname -m); \
-    case "$ARCH" in \
-        x86_64)  ALIST_ARCH="amd64" ;; \
-        aarch64) ALIST_ARCH="arm64" ;; \
-        armv7l)  ALIST_ARCH="armv7" ;; \
-        *)       echo "Unsupported arch: $ARCH" && exit 1 ;; \
-    esac; \
+    if [ "$TARGETARCH" = "amd64" ]; then ALIST_ARCH="amd64"; \
+    elif [ "$TARGETARCH" = "arm64" ]; then ALIST_ARCH="arm64"; \
+    elif [ "$TARGETARCH" = "arm" ]; then ALIST_ARCH="armv7"; \
+    else echo "Unsupported arch: $TARGETARCH" && exit 1; fi; \
     if [ "$ALIST_VERSION" = "latest" ]; then \
-        ALIST_URL="https://github.com/AlistGo/alist/releases/latest/download/alist-linux-musl-${ALIST_ARCH}.tar.gz"; \
+    ALIST_URL="https://github.com/AlistGo/alist/releases/latest/download/alist-linux-musl-${ALIST_ARCH}.tar.gz"; \
     else \
-        ALIST_URL="https://github.com/AlistGo/alist/releases/download/${ALIST_VERSION}/alist-linux-musl-${ALIST_ARCH}.tar.gz"; \
+    ALIST_URL="https://github.com/AlistGo/alist/releases/download/${ALIST_VERSION}/alist-linux-musl-${ALIST_ARCH}.tar.gz"; \
     fi; \
-    echo "Downloading Alist from: $ALIST_URL"; \
+    echo "Downloading Alist ($ALIST_ARCH) from: $ALIST_URL"; \
     curl -fsSL "$ALIST_URL" -o /tmp/alist.tar.gz && \
     tar -xzf /tmp/alist.tar.gz -C /tmp/ && \
     mv /tmp/alist /app/alist && \
     chmod +x /app/alist && \
     rm -f /tmp/alist.tar.gz
 
-# Download Rclone
+# Download Rclone (use TARGETARCH from Buildx)
 RUN set -ex; \
-    ARCH=$(uname -m); \
-    case "$ARCH" in \
-        x86_64)  RCLONE_ARCH="amd64" ;; \
-        aarch64) RCLONE_ARCH="arm64" ;; \
-        armv7l)  RCLONE_ARCH="arm" ;; \
-        *)       echo "Unsupported arch: $ARCH" && exit 1 ;; \
-    esac; \
+    if [ "$TARGETARCH" = "arm" ]; then RCLONE_ARCH="arm"; \
+    else RCLONE_ARCH="$TARGETARCH"; fi; \
+    echo "Downloading Rclone ($RCLONE_ARCH)..."; \
     curl -fsSL "https://downloads.rclone.org/rclone-${RCLONE_VERSION}-linux-${RCLONE_ARCH}.zip" -o /tmp/rclone.zip && \
     unzip -q /tmp/rclone.zip -d /tmp/ && \
     mv /tmp/rclone-*/rclone /usr/bin/rclone && \
@@ -88,12 +84,10 @@ COPY supervisor/supervisord.conf /etc/supervisord.conf
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Environment variables
+# Environment variables (non-sensitive defaults)
 ENV TZ=Asia/Shanghai \
     WEB_USERNAME=admin \
-    WEB_PASSWORD=admin \
-    ALIST_ADMIN_USERNAME=admin \
-    ALIST_ADMIN_PASSWORD=admin
+    ALIST_ADMIN_USERNAME=admin
 
 # Data volume
 VOLUME ["/data"]
