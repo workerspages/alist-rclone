@@ -259,9 +259,25 @@ app.post('/api/rclone/test', authMiddleware, async (req, res) => {
 app.post('/api/rclone/ls', authMiddleware, async (req, res) => {
   try {
     const { fs: remotePath, remote, path: dirPath } = req.body;
-    const fsStr = remotePath || (remote ? remote + ':' + (dirPath || '') : null);
+    // Rclone operations/list works best with "fs" as the remote root (e.g. "alist:") 
+    // and "remote" as the subpath (e.g. "/path/to/folder")
+
+    // Support two types of calls:
+    // 1. fs="alist:/path", remote is unused
+    // 2. fs="alist:", remote="/path"
+
+    let fsStr = remotePath || remote;
+    let remoteStr = dirPath || '';
+
+    // If fs contains the full path (e.g., from frontend browse), split it
+    if (fsStr && fsStr.includes(':') && !remoteStr) {
+      const parts = fsStr.split(':');
+      fsStr = parts[0] + ':';
+      remoteStr = parts.slice(1).join(':').replace(/^\/+/, ''); // Remove leading slashes
+    }
+
     if (!fsStr) return res.status(400).json({ error: 'fs or remote is required' });
-    const result = await rcloneRC('/operations/list', { fs: fsStr, remote: '' });
+    const result = await rcloneRC('/operations/list', { fs: fsStr, remote: remoteStr });
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
