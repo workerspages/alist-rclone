@@ -22,7 +22,6 @@ ARG TARGETARCH
 
 # Versions (override with build args)
 ARG ALIST_VERSION=latest
-ARG RCLONE_VERSION=current
 
 # Install base packages
 RUN apk add --no-cache \
@@ -56,14 +55,18 @@ RUN set -ex; \
     chmod +x /app/alist && \
     rm -f /tmp/alist.tar.gz
 
-# Download Rclone (use TARGETARCH from Buildx)
+# Download Rclone mod (wiserain fork, use TARGETARCH from Buildx)
 RUN set -ex; \
-    if [ "$TARGETARCH" = "arm" ]; then RCLONE_ARCH="arm"; \
-    else RCLONE_ARCH="$TARGETARCH"; fi; \
-    echo "Downloading Rclone ($RCLONE_ARCH)..."; \
-    curl -fsSL "https://downloads.rclone.org/rclone-${RCLONE_VERSION}-linux-${RCLONE_ARCH}.zip" -o /tmp/rclone.zip && \
-    unzip -q /tmp/rclone.zip -d /tmp/ && \
-    mv /tmp/rclone-*/rclone /usr/bin/rclone && \
+    if [ "$TARGETARCH" = "amd64" ]; then RCLONE_ARCH="amd64"; \
+    elif [ "$TARGETARCH" = "arm64" ]; then RCLONE_ARCH="arm64"; \
+    elif [ "$TARGETARCH" = "arm" ]; then RCLONE_ARCH="arm-v7"; \
+    else echo "Unsupported arch: $TARGETARCH" && exit 1; fi; \
+    RCLONE_TAG=$(curl -fsS https://api.github.com/repos/wiserain/rclone/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'); \
+    RCLONE_ZIP="rclone-${RCLONE_TAG}-linux-${RCLONE_ARCH}.zip"; \
+    echo "Downloading Rclone mod ($RCLONE_ARCH) tag: $RCLONE_TAG"; \
+    curl -fsSL "https://github.com/wiserain/rclone/releases/download/${RCLONE_TAG}/${RCLONE_ZIP}" -o /tmp/rclone.zip && \
+    unzip -q /tmp/rclone.zip -d /tmp/rclone_unzip && \
+    mv /tmp/rclone_unzip/*/rclone /usr/bin/rclone && \
     chmod +x /usr/bin/rclone && \
     rm -rf /tmp/rclone*
 
