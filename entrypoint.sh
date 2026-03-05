@@ -15,6 +15,7 @@ fi
 echo "[Init] Initializing Alist..."
 if [ ! -f /data/alist/config.json ]; then
     echo "[Init] First run, creating Alist config..."
+    mkdir -p /data/alist
     cd /data/alist
     /app/alist server --data /data/alist &
     ALIST_PID=$!
