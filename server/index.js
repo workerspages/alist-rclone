@@ -1,0 +1,227 @@
+const express = require('express');
+const jwt = require('jsonwebtoken');
+const { execSync, exec } = require('child_process');
+const fs = require('fs');
+const http = require('http');
+
+const app = express();
+app.use(express.json());
+
+const PORT = 3001;
+const JWT_SECRET = process.env.JWT_SECRET || 'alist-rclone-secret-key-' + Date.now();
+const WEB_USERNAME = process.env.WEB_USERNAME || 'admin';
+const WEB_PASSWORD = process.env.WEB_PASSWORD || 'admin';
+const RCLONE_ADDR = process.env.RCLONE_ADDR || 'http://127.0.0.1:5572';
+
+// ========================
+// Auth Middleware
+// ========================
+function authMiddleware(req, res, next) {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+}
+
+// ========================
+// Rclone RC API Helper
+// ========================
+function rcloneRC(command, params = {}) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(params);
+    const url = new URL(command, RCLONE_ADDR);
+    const options = {
+      hostname: url.hostname,
+      port: url.port,
+      path: url.pathname,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+      timeout: 10000,
+    };
+    const req = http.request(options, (resp) => {
+      let body = '';
+      resp.on('data', (chunk) => (body += chunk));
+      resp.on('end', () => {
+        try { resolve(JSON.parse(body)); }
+        catch { resolve(body); }
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('Rclone RC timeout')); });
+    req.write(data);
+    req.end();
+  });
+}
+
+// ========================
+// Auth Routes
+// ========================
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body;
+  if (username === WEB_USERNAME && password === WEB_PASSWORD) {
+    const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '24h' });
+    return res.json({ token, username });
+  }
+  return res.status(401).json({ error: 'Invalid credentials' });
+});
+
+app.get('/api/auth/check', authMiddleware, (req, res) => {
+  res.json({ valid: true, username: req.user.username });
+});
+
+// ========================
+// Status Routes
+// ========================
+app.get('/api/status', authMiddleware, async (req, res) => {
+  const status = { alist: 'stopped', rclone: 'stopped' };
+
+  // Check Alist
+  try {
+    const result = execSync('supervisorctl status alist 2>/dev/null', { encoding: 'utf-8', timeout: 5000 });
+    status.alist = result.includes('RUNNING') ? 'running' : 'stopped';
+  } catch { status.alist = 'stopped'; }
+
+  // Check Rclone
+  try {
+    await rcloneRC('/rc/noop');
+    status.rclone = 'running';
+  } catch { status.rclone = 'stopped'; }
+
+  // System info
+  try {
+    const uptime = fs.readFileSync('/proc/uptime', 'utf-8').split(' ')[0];
+    status.uptime = Math.floor(parseFloat(uptime));
+  } catch { status.uptime = 0; }
+
+  res.json(status);
+});
+
+// ========================
+// Rclone Remote Management
+// ========================
+app.get('/api/rclone/remotes', authMiddleware, async (req, res) => {
+  try {
+    const result = await rcloneRC('/config/listremotes');
+    const remotes = result.remotes || [];
+    const details = [];
+    for (const name of remotes) {
+      try {
+        const dump = await rcloneRC('/config/get', { name });
+        details.push({ name, ...dump });
+      } catch {
+        details.push({ name, type: 'unknown' });
+      }
+    }
+    res.json({ remotes: details });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to list remotes: ' + err.message });
+  }
+});
+
+app.post('/api/rclone/remote', authMiddleware, async (req, res) => {
+  try {
+    const { name, type, parameters } = req.body;
+    if (!name || !type) return res.status(400).json({ error: 'name and type are required' });
+    await rcloneRC('/config/create', { name, type, parameters: parameters || {} });
+    res.json({ success: true, message: `Remote "${name}" created` });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create remote: ' + err.message });
+  }
+});
+
+app.put('/api/rclone/remote/:name', authMiddleware, async (req, res) => {
+  try {
+    const { name } = req.params;
+    const { parameters } = req.body;
+    await rcloneRC('/config/update', { name, parameters: parameters || {} });
+    res.json({ success: true, message: `Remote "${name}" updated` });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update remote: ' + err.message });
+  }
+});
+
+app.delete('/api/rclone/remote/:name', authMiddleware, async (req, res) => {
+  try {
+    const { name } = req.params;
+    await rcloneRC('/config/delete', { name });
+    res.json({ success: true, message: `Remote "${name}" deleted` });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete remote: ' + err.message });
+  }
+});
+
+app.get('/api/rclone/providers', authMiddleware, async (req, res) => {
+  try {
+    const result = await rcloneRC('/config/providers');
+    const providers = (result.providers || []).map((p) => ({
+      name: p.Name,
+      description: p.Description,
+      prefix: p.Prefix,
+    }));
+    res.json({ providers });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to get providers: ' + err.message });
+  }
+});
+
+// ========================
+// Service Management
+// ========================
+app.post('/api/service/restart', authMiddleware, (req, res) => {
+  const { service } = req.body;
+  const allowed = ['alist', 'rclone', 'nginx'];
+  if (!allowed.includes(service)) return res.status(400).json({ error: 'Invalid service' });
+  try {
+    execSync(`supervisorctl restart ${service}`, { encoding: 'utf-8', timeout: 15000 });
+    res.json({ success: true, message: `${service} restarted` });
+  } catch (err) {
+    res.status(500).json({ error: 'Restart failed: ' + err.message });
+  }
+});
+
+app.get('/api/logs/:service', authMiddleware, (req, res) => {
+  const { service } = req.params;
+  const allowed = ['alist', 'rclone', 'nginx', 'api'];
+  if (!allowed.includes(service)) return res.status(400).json({ error: 'Invalid service' });
+  const logMap = {
+    alist: '/var/log/alist.log',
+    rclone: '/var/log/rclone.log',
+    nginx: '/var/log/nginx/error.log',
+    api: '/var/log/api.log',
+  };
+  try {
+    const lines = req.query.lines || 100;
+    const log = execSync(`tail -n ${lines} ${logMap[service]} 2>/dev/null || echo "No logs available"`, {
+      encoding: 'utf-8',
+      timeout: 5000,
+    });
+    res.json({ service, log });
+  } catch {
+    res.json({ service, log: 'No logs available' });
+  }
+});
+
+// ========================
+// Rclone Mount & Sync Operations
+// ========================
+app.get('/api/rclone/operations/about', authMiddleware, async (req, res) => {
+  try {
+    const { remote } = req.query;
+    if (!remote) return res.status(400).json({ error: 'remote is required' });
+    const result = await rcloneRC('/operations/about', { fs: remote + ':' });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ========================
+// Start Server
+// ========================
+app.listen(PORT, '127.0.0.1', () => {
+  console.log(`API server running on http://127.0.0.1:${PORT}`);
+});
