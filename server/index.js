@@ -226,10 +226,27 @@ app.post('/api/rclone/test', authMiddleware, async (req, res) => {
     const { remote } = req.body;
     if (!remote) return res.status(400).json({ error: 'remote is required' });
     const start = Date.now();
-    const result = await rcloneRC('/operations/list', { fs: remote + ':', remote: '' });
+    const fsPath = remote + ':';
+
+    // First try fsinfo, which initializes the backend and checks basic config
+    await rcloneRC('/operations/fsinfo', { fs: fsPath });
+
+    // Then try to read the root directory to verify credentials and connectivity
+    // Using a limit to avoid fetching too many items
+    const result = await rcloneRC('/operations/list', {
+      fs: fsPath,
+      remote: '',
+      opt: { showHash: false, noModTime: true }
+    });
+
+    // If it returned an empty list, let's also try stat just in case
+    if (!result.list || result.list.length === 0) {
+      await rcloneRC('/operations/stat', { fs: fsPath, remote: '' });
+    }
+
     const elapsed = Date.now() - start;
     const count = (result.list || []).length;
-    res.json({ ok: true, message: `连接成功！根目录有 ${count} 个项目，耗时 ${elapsed}ms` });
+    res.json({ ok: true, message: `连接成功！响应毫秒: ${elapsed}ms, 根目录项目数: ${count}` });
   } catch (err) {
     res.json({ ok: false, message: '连接失败: ' + err.message });
   }
