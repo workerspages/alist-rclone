@@ -26,7 +26,6 @@ ARG ALIST_VERSION=latest
 # Install base packages
 RUN apk add --no-cache \
     nginx \
-    nginx-mod-http-auth-request \
     supervisor \
     nodejs \
     npm \
