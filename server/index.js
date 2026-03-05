@@ -64,6 +64,7 @@ app.post('/api/login', (req, res) => {
   const { username, password } = req.body;
   if (username === WEB_USERNAME && password === WEB_PASSWORD) {
     const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '24h' });
+    res.cookie('_auth_token', token, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 86400000 });
     return res.json({ token, username });
   }
   return res.status(401).json({ error: 'Invalid credentials' });
@@ -71,6 +72,18 @@ app.post('/api/login', (req, res) => {
 
 app.get('/api/auth/check', authMiddleware, (req, res) => {
   res.json({ valid: true, username: req.user.username });
+});
+
+// Cookie-based auth check for nginx auth_request
+app.get('/api/auth/cookie', (req, res) => {
+  const token = req.cookies?._auth_token || req.headers.cookie?.match(/_auth_token=([^;]+)/)?.[1];
+  if (!token) return res.status(401).end();
+  try {
+    jwt.verify(token, JWT_SECRET);
+    return res.status(200).end();
+  } catch {
+    return res.status(401).end();
+  }
 });
 
 // ========================
