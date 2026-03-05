@@ -389,6 +389,71 @@
                                             <span>移动</span>
                                         </button>
                                     </div>
+                                    <!-- Advanced Options -->
+                                    <details class="advanced-options" id="transfer-advanced">
+                                        <summary>⚙️ 高级选项</summary>
+                                        <div class="advanced-grid">
+                                            <div class="adv-group">
+                                                <label>并发传输数 (--transfers)</label>
+                                                <input type="number" id="opt-transfers" placeholder="4" min="1">
+                                            </div>
+                                            <div class="adv-group">
+                                                <label>检查线程数 (--checkers)</label>
+                                                <input type="number" id="opt-checkers" placeholder="8" min="1">
+                                            </div>
+                                            <div class="adv-group">
+                                                <label>缓冲区大小 (--buffer-size)</label>
+                                                <input type="text" id="opt-buffer-size" placeholder="16M">
+                                            </div>
+                                            <div class="adv-group">
+                                                <label>最大文件大小 (--max-size)</label>
+                                                <input type="text" id="opt-max-size" placeholder="例如: 5G">
+                                            </div>
+                                            <div class="adv-group">
+                                                <label>最小文件大小 (--min-size)</label>
+                                                <input type="text" id="opt-min-size" placeholder="例如: 1K">
+                                            </div>
+                                            <div class="adv-group">
+                                                <label>超时时间 (--timeout)</label>
+                                                <input type="text" id="opt-timeout" placeholder="5m0s">
+                                            </div>
+                                            <div class="adv-group">
+                                                <label>重试次数 (--retries)</label>
+                                                <input type="number" id="opt-retries" placeholder="3" min="0">
+                                            </div>
+                                            <div class="adv-group">
+                                                <label>低级重试 (--low-level-retries)</label>
+                                                <input type="number" id="opt-low-level-retries" placeholder="10"
+                                                    min="0">
+                                            </div>
+                                        </div>
+                                        <div class="adv-group" style="margin-top:12px">
+                                            <label>包含规则 (--include)</label>
+                                            <input type="text" id="opt-include" placeholder="例如: /{手机备份}/**">
+                                        </div>
+                                        <div class="adv-group" style="margin-top:8px">
+                                            <label>排除规则 (--exclude)</label>
+                                            <input type="text" id="opt-exclude" placeholder="例如: *.tmp">
+                                        </div>
+                                        <div class="adv-checkboxes" style="margin-top:12px">
+                                            <label class="adv-checkbox"><input type="checkbox"
+                                                    id="opt-ignore-errors"><span>忽略错误 (--ignore-errors)</span></label>
+                                            <label class="adv-checkbox"><input type="checkbox"
+                                                    id="opt-check-first"><span>先检查再传输 (--check-first)</span></label>
+                                            <label class="adv-checkbox"><input type="checkbox"
+                                                    id="opt-size-only"><span>仅比较大小 (--size-only)</span></label>
+                                            <label class="adv-checkbox"><input type="checkbox"
+                                                    id="opt-no-traverse"><span>不遍历目标 (--no-traverse)</span></label>
+                                            <label class="adv-checkbox"><input type="checkbox"
+                                                    id="opt-verbose"><span>详细输出 (-v)</span></label>
+                                        </div>
+                                        <div class="adv-group" style="margin-top:12px">
+                                            <label>额外标志 (原始命令行参数)</label>
+                                            <textarea id="opt-extra-flags"
+                                                placeholder="每行一个参数，例如:&#10;--bwlimit 10M&#10;--log-level DEBUG"
+                                                rows="3"></textarea>
+                                        </div>
+                                    </details>
                                     <div class="transfer-note">
                                         <small>💡 <b>复制</b>: 将源文件复制到目标 | <b>同步</b>: 使目标与源完全一致（会删除目标多余文件）| <b>移动</b>:
                                             移动后删除源文件</small>
@@ -506,21 +571,7 @@
                     <div class="form-group">
                         <label for="remote-type">存储类型</label>
                         <select id="remote-type" required>
-                            <option value="">-- 选择类型 --</option>
-                            <option value="s3">Amazon S3 / 兼容存储</option>
-                            <option value="drive">Google Drive</option>
-                            <option value="onedrive">Microsoft OneDrive</option>
-                            <option value="dropbox">Dropbox</option>
-                            <option value="webdav">WebDAV</option>
-                            <option value="sftp">SFTP</option>
-                            <option value="ftp">FTP</option>
-                            <option value="b2">Backblaze B2</option>
-                            <option value="azureblob">Azure Blob Storage</option>
-                            <option value="swift">OpenStack Swift</option>
-                            <option value="mega">Mega</option>
-                            <option value="pcloud">pCloud</option>
-                            <option value="smb">SMB/CIFS</option>
-                            <option value="local">本地磁盘</option>
+                            <option value="">-- 加载中... --</option>
                         </select>
                     </div>
                     <div id="remote-params" class="remote-params">

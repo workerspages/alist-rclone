@@ -290,12 +290,28 @@ const App = {
     // ========================
     // Remote Modal
     // ========================
-    showAddRemoteModal() {
+    providersList: null,
+
+    async showAddRemoteModal() {
         document.getElementById('modal-title').textContent = '添加远程存储';
         document.getElementById('remote-name').value = '';
-        document.getElementById('remote-type').value = '';
         document.getElementById('remote-params').innerHTML = '';
         document.getElementById('modal-overlay').classList.add('active');
+        // Load providers if not cached
+        const select = document.getElementById('remote-type');
+        if (!this.providersList) {
+            select.innerHTML = '<option value="">-- 加载中... --</option>';
+            try {
+                const data = await this.api('GET', '/console-api/rclone/providers');
+                this.providersList = (data.providers || []).sort((a, b) => a.name.localeCompare(b.name));
+            } catch {
+                this.providersList = [];
+                this.toast('加载存储类型失败', 'error');
+            }
+        }
+        select.innerHTML = '<option value="">-- 选择类型 (' + this.providersList.length + ' 种) --</option>' +
+            this.providersList.map(p => `<option value="${this.escapeHtml(p.prefix)}">${this.escapeHtml(p.prefix)} — ${this.escapeHtml(p.description)}</option>`).join('');
+        select.value = '';
     },
 
     closeModal() {
@@ -305,26 +321,52 @@ const App = {
     renderRemoteParams(type) {
         const container = document.getElementById('remote-params');
         const params = this.getParamsForType(type);
-        if (!params.length) {
-            container.innerHTML = '';
-            return;
-        }
-        container.innerHTML = params
-            .map(
-                (p) => `
+        if (params.length) {
+            container.innerHTML = params
+                .map(
+                    (p) => `
             <div class="form-group">
                 <label for="param-${p.name}">${this.escapeHtml(p.label)}</label>
                 ${p.type === 'select'
-                        ? `<select id="param-${p.name}" data-param="${p.name}">
+                            ? `<select id="param-${p.name}" data-param="${p.name}">
                         ${p.options.map((o) => `<option value="${o.value}">${o.label}</option>`).join('')}
                     </select>`
-                        : p.type === 'textarea'
-                            ? `<textarea id="param-${p.name}" data-param="${p.name}" placeholder="${this.escapeHtml(p.placeholder || '')}"></textarea>`
-                            : `<input type="${p.sensitive ? 'password' : 'text'}" id="param-${p.name}" data-param="${p.name}" placeholder="${this.escapeHtml(p.placeholder || '')}">`
-                    }
+                            : p.type === 'textarea'
+                                ? `<textarea id="param-${p.name}" data-param="${p.name}" placeholder="${this.escapeHtml(p.placeholder || '')}"></textarea>`
+                                : `<input type="${p.sensitive ? 'password' : 'text'}" id="param-${p.name}" data-param="${p.name}" placeholder="${this.escapeHtml(p.placeholder || '')}">`
+                        }
             </div>`
-            )
-            .join('');
+                )
+                .join('');
+        } else if (type) {
+            // Generic key-value params for types without presets
+            container.innerHTML = `
+                <div class="generic-params">
+                    <div class="generic-params-note">
+                        <small>💡 输入该存储类型所需的参数（键值对），参考 <a href="https://rclone.org/overview/" target="_blank" style="color:var(--accent-hover)">Rclone 文档</a></small>
+                    </div>
+                    <div id="generic-param-rows">
+                        <div class="param-input-row">
+                            <input type="text" data-param-key placeholder="参数名" class="param-key-input">
+                            <input type="text" data-param-val placeholder="参数值" class="param-val-input">
+                            <button class="btn-icon" onclick="this.closest('.param-input-row').remove()" title="删除">✕</button>
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary btn-sm" onclick="App.addGenericParam()" style="margin-top:8px">+ 添加参数</button>
+                </div>`;
+        } else {
+            container.innerHTML = '';
+        }
+    },
+
+    addGenericParam() {
+        const row = document.createElement('div');
+        row.className = 'param-input-row';
+        row.innerHTML = `
+            <input type="text" data-param-key placeholder="参数名" class="param-key-input">
+            <input type="text" data-param-val placeholder="参数值" class="param-val-input">
+            <button class="btn-icon" onclick="this.closest('.param-input-row').remove()" title="删除">✕</button>`;
+        document.getElementById('generic-param-rows').appendChild(row);
     },
 
     getParamsForType(type) {
@@ -426,9 +468,16 @@ const App = {
             return;
         }
         const parameters = {};
+        // Collect preset params
         document.querySelectorAll('#remote-params [data-param]').forEach((el) => {
             const val = el.value.trim();
             if (val) parameters[el.dataset.param] = val;
+        });
+        // Collect generic key-value params
+        document.querySelectorAll('#remote-params .param-input-row').forEach((row) => {
+            const key = row.querySelector('[data-param-key]')?.value.trim();
+            const val = row.querySelector('[data-param-val]')?.value.trim();
+            if (key && val) parameters[key] = val;
         });
         try {
             await this.api('POST', '/console-api/rclone/remote', { name, type, parameters });
@@ -632,9 +681,52 @@ const App = {
         const modeNames = { copy: '复制', sync: '同步', move: '移动' };
         if (mode === 'sync' && !confirm('同步会删除目标中源不存在的文件，确定继续？')) return;
         if (mode === 'move' && !confirm('移动完成后源文件将被删除，确定继续？')) return;
+
+        // Collect advanced options
+        const _config = {};
+        const _filter = {};
+        const getVal = (id) => document.getElementById(id)?.value?.trim() || '';
+        const getCheck = (id) => document.getElementById(id)?.checked || false;
+
+        if (getVal('opt-transfers')) _config.Transfers = parseInt(getVal('opt-transfers'));
+        if (getVal('opt-checkers')) _config.Checkers = parseInt(getVal('opt-checkers'));
+        if (getVal('opt-buffer-size')) _config.BufferSize = getVal('opt-buffer-size');
+        if (getVal('opt-timeout')) _config.Timeout = getVal('opt-timeout');
+        if (getVal('opt-retries')) _config.LowLevelRetries = parseInt(getVal('opt-retries'));
+        if (getVal('opt-low-level-retries')) _config.LowLevelRetries = parseInt(getVal('opt-low-level-retries'));
+        if (getCheck('opt-ignore-errors')) _config.IgnoreErrors = true;
+        if (getCheck('opt-check-first')) _config.CheckFirst = true;
+        if (getCheck('opt-size-only')) _config.SizeOnly = true;
+        if (getCheck('opt-no-traverse')) _config.NoTraverse = true;
+        if (getCheck('opt-verbose')) _config.LogLevel = 'DEBUG';
+
+        if (getVal('opt-max-size')) _filter.MaxSize = getVal('opt-max-size');
+        if (getVal('opt-min-size')) _filter.MinSize = getVal('opt-min-size');
+        if (getVal('opt-include')) _filter.IncludeRule = [getVal('opt-include')];
+        if (getVal('opt-exclude')) _filter.ExcludeRule = [getVal('opt-exclude')];
+
+        // Parse extra flags into _config
+        const extra = getVal('opt-extra-flags');
+        if (extra) {
+            extra.split('\n').forEach(line => {
+                line = line.trim();
+                if (!line || !line.startsWith('-')) return;
+                const match = line.match(/^--?([\w-]+)\s*(.*)/);
+                if (match) {
+                    const key = match[1].replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+                    const val = match[2].trim();
+                    _config[key] = val || true;
+                }
+            });
+        }
+
+        const body = { srcFs, dstFs, _async: true };
+        if (Object.keys(_config).length) body._config = _config;
+        if (Object.keys(_filter).length) body._filter = _filter;
+
         try {
             this.toast(`正在启动${modeNames[mode]}任务...`, 'info');
-            await this.api('POST', `/console-api/rclone/${mode}`, { srcFs, dstFs, _async: true });
+            await this.api('POST', `/console-api/rclone/${mode}`, body);
             this.toast(`${modeNames[mode]}任务已启动: ${srcFs} → ${dstFs}`, 'success');
             this.startJobPolling();
         } catch (err) {

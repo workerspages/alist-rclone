@@ -237,9 +237,12 @@ app.post('/api/rclone/ls', authMiddleware, async (req, res) => {
 // Copy files between remotes
 app.post('/api/rclone/copy', authMiddleware, async (req, res) => {
   try {
-    const { srcFs, dstFs, _async } = req.body;
+    const { srcFs, dstFs, _async, _config, _filter } = req.body;
     if (!srcFs || !dstFs) return res.status(400).json({ error: 'srcFs and dstFs are required' });
-    const result = await rcloneRC('/sync/copy', { srcFs, dstFs, _async: _async !== false });
+    const params = { srcFs, dstFs, _async: _async !== false };
+    if (_config) params._config = _config;
+    if (_filter) params._filter = _filter;
+    const result = await rcloneRC('/sync/copy', params);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -249,9 +252,12 @@ app.post('/api/rclone/copy', authMiddleware, async (req, res) => {
 // Sync files between remotes
 app.post('/api/rclone/sync', authMiddleware, async (req, res) => {
   try {
-    const { srcFs, dstFs, _async } = req.body;
+    const { srcFs, dstFs, _async, _config, _filter } = req.body;
     if (!srcFs || !dstFs) return res.status(400).json({ error: 'srcFs and dstFs are required' });
-    const result = await rcloneRC('/sync/sync', { srcFs, dstFs, _async: _async !== false });
+    const params = { srcFs, dstFs, _async: _async !== false };
+    if (_config) params._config = _config;
+    if (_filter) params._filter = _filter;
+    const result = await rcloneRC('/sync/sync', params);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -261,9 +267,12 @@ app.post('/api/rclone/sync', authMiddleware, async (req, res) => {
 // Move files between remotes
 app.post('/api/rclone/move', authMiddleware, async (req, res) => {
   try {
-    const { srcFs, dstFs, _async } = req.body;
+    const { srcFs, dstFs, _async, _config, _filter } = req.body;
     if (!srcFs || !dstFs) return res.status(400).json({ error: 'srcFs and dstFs are required' });
-    const result = await rcloneRC('/sync/move', { srcFs, dstFs, _async: _async !== false });
+    const params = { srcFs, dstFs, _async: _async !== false };
+    if (_config) params._config = _config;
+    if (_filter) params._filter = _filter;
+    const result = await rcloneRC('/sync/move', params);
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -913,6 +913,41 @@ body {
     margin-bottom: 16px;
 }
 
+.generic-params-note {
+    margin-bottom: 12px;
+    color: var(--text-muted);
+    padding: 10px 14px;
+    background: rgba(99, 102, 241, 0.06);
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(99, 102, 241, 0.1);
+}
+
+.param-input-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    align-items: center;
+}
+
+.param-key-input,
+.param-val-input {
+    flex: 1;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 0.87rem;
+    font-family: inherit;
+    outline: none;
+}
+
+.param-key-input:focus,
+.param-val-input:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
 /* ========================================
    Toast
    ======================================== */
@@ -1234,6 +1269,111 @@ body {
     text-align: center;
     padding: 16px;
     color: var(--success);
+}
+
+/* Advanced Options */
+.advanced-options {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.advanced-options summary {
+    padding: 12px 16px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 0.87rem;
+    font-weight: 500;
+    user-select: none;
+    list-style: none;
+}
+
+.advanced-options summary::-webkit-details-marker {
+    display: none;
+}
+
+.advanced-options summary::before {
+    content: '▶ ';
+    font-size: 0.7rem;
+}
+
+.advanced-options[open] summary::before {
+    content: '▼ ';
+}
+
+.advanced-options[open] summary {
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 0;
+}
+
+.advanced-options> :not(summary) {
+    padding: 0 16px;
+}
+
+.advanced-options> :last-child {
+    padding-bottom: 16px;
+}
+
+.advanced-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+    padding-top: 16px;
+}
+
+.adv-group label {
+    display: block;
+    font-size: 0.73rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+}
+
+.adv-group input,
+.adv-group textarea {
+    width: 100%;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    font-family: inherit;
+    outline: none;
+}
+
+.adv-group input:focus,
+.adv-group textarea:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.adv-group textarea {
+    resize: vertical;
+    font-family: 'SF Mono', monospace;
+    font-size: 0.73rem;
+}
+
+.adv-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+}
+
+.adv-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.adv-checkbox input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
 }
 
 /* ========================================
