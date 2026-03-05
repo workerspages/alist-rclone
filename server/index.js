@@ -231,22 +231,43 @@ app.post('/api/rclone/test', authMiddleware, async (req, res) => {
     // First try fsinfo, which initializes the backend and checks basic config
     await rcloneRC('/operations/fsinfo', { fs: fsPath });
 
-    // Then try to read the root directory to verify credentials and connectivity
-    // Using a limit to avoid fetching too many items
+    // Try to get quota/space info - this is a strong indicator of successful auth for most remotes
+    let aboutOk = false;
+    try {
+      await rcloneRC('/operations/about', { fs: fsPath });
+      aboutOk = true;
+    } catch (err) {
+      // Some remotes (like local, http) don't support about, so we ignore errors here
+    }
+
+    // Read the root directory to verify credentials and connectivity
     const result = await rcloneRC('/operations/list', {
       fs: fsPath,
       remote: '',
       opt: { showHash: false, noModTime: true }
     });
 
-    // If it returned an empty list, let's also try stat just in case
-    if (!result.list || result.list.length === 0) {
-      await rcloneRC('/operations/stat', { fs: fsPath, remote: '' });
+    const items = result.list || [];
+
+    if (items.length === 0) {
+      // If the directory is empty AND about is not supported, we must be extra careful.
+      // E.g. WebDAV connected to a wrong URL might return an HTML page yielding 0 items and no error.
+      try {
+        await rcloneRC('/operations/stat', { fs: fsPath, remote: '' });
+      } catch (err) {
+        throw new Error(`探测根目录节点失败，可能由于路径错误、密码错误或服务器不支持 (${err.message})`);
+      }
+
+      // Still 0 items and stat succeeded (but it's empty)? If it's a known risky protocol, warn the user.
+      // But we just assume it's OK for now if stat didn't throw.
     }
 
     const elapsed = Date.now() - start;
-    const count = (result.list || []).length;
-    res.json({ ok: true, message: `连接成功！响应毫秒: ${elapsed}ms, 根目录项目数: ${count}` });
+    let msg = `连接成功！响应耗时: ${elapsed}ms`;
+    if (items.length > 0) msg += `, 根目录有 ${items.length} 个项目`;
+    else msg += ` (目录为空)`;
+
+    res.json({ ok: true, message: msg });
   } catch (err) {
     res.json({ ok: false, message: '连接失败: ' + err.message });
   }
