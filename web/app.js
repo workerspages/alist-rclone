@@ -265,6 +265,9 @@ const App = {
                         <div class="remote-card-header">
                             <h4>${this.escapeHtml(r.name)} <span class="remote-type-badge">${this.escapeHtml(r.type || 'unknown')}</span></h4>
                             <div class="remote-card-actions">
+                                <button class="btn-icon" onclick="App.testRemote('${this.escapeHtml(r.name)}')" title="测试连接">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                                </button>
                                 <button class="btn-icon" onclick="App.deleteRemote('${this.escapeHtml(r.name)}')" title="删除">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                                 </button>
@@ -276,6 +279,20 @@ const App = {
                 .join('');
         } catch (err) {
             container.innerHTML = `<div class="empty-state"><p>加载失败: ${this.escapeHtml(err.message)}</p></div>`;
+        }
+    },
+
+    async testRemote(name) {
+        try {
+            this.toast(`正在测试连接 "${name}"...`, 'info');
+            const data = await this.api('POST', '/console-api/rclone/test', { remote: name });
+            if (data.ok) {
+                this.toast(data.message, 'success');
+            } else {
+                this.toast(data.message, 'error');
+            }
+        } catch (err) {
+            this.toast('测试请求失败: ' + err.message, 'error');
         }
     },
 

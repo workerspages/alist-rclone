@@ -220,6 +220,21 @@ app.get('/api/logs/:service', authMiddleware, (req, res) => {
   }
 });
 
+// Test remote connection
+app.post('/api/rclone/test', authMiddleware, async (req, res) => {
+  try {
+    const { remote } = req.body;
+    if (!remote) return res.status(400).json({ error: 'remote is required' });
+    const start = Date.now();
+    const result = await rcloneRC('/operations/list', { fs: remote + ':', remote: '' });
+    const elapsed = Date.now() - start;
+    const count = (result.list || []).length;
+    res.json({ ok: true, message: `连接成功！根目录有 ${count} 个项目，耗时 ${elapsed}ms` });
+  } catch (err) {
+    res.json({ ok: false, message: '连接失败: ' + err.message });
+  }
+});
+
 // ========================
 // File Operations
 // ========================
