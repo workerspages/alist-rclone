@@ -299,18 +299,23 @@ const App = {
         document.getElementById('modal-overlay').classList.add('active');
         // Load providers if not cached
         const select = document.getElementById('remote-type');
-        if (!this.providersList) {
+        if (!this.providersList || this.providersList.length === 0) {
             select.innerHTML = '<option value="">-- 加载中... --</option>';
             try {
                 const data = await this.api('GET', '/console-api/rclone/providers');
-                this.providersList = (data.providers || []).sort((a, b) => a.name.localeCompare(b.name));
-            } catch {
-                this.providersList = [];
-                this.toast('加载存储类型失败', 'error');
+                this.providersList = (data.providers || []).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                if (this.providersList.length === 0) {
+                    this.toast('未获取到存储类型，Rclone 可能未就绪', 'error');
+                }
+            } catch (err) {
+                this.providersList = null;
+                this.toast('加载存储类型失败: ' + (err.message || err), 'error');
+                select.innerHTML = '<option value="">-- 加载失败，请重试 --</option>';
+                return;
             }
         }
         select.innerHTML = '<option value="">-- 选择类型 (' + this.providersList.length + ' 种) --</option>' +
-            this.providersList.map(p => `<option value="${this.escapeHtml(p.prefix)}">${this.escapeHtml(p.prefix)} — ${this.escapeHtml(p.description)}</option>`).join('');
+            this.providersList.map(p => `<option value="${this.escapeHtml(p.prefix || p.name)}">${this.escapeHtml(p.prefix || p.name)} — ${this.escapeHtml(p.description || '')}</option>`).join('');
         select.value = '';
     },
 

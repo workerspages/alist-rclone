@@ -170,10 +170,12 @@ app.delete('/api/rclone/remote/:name', authMiddleware, async (req, res) => {
 app.get('/api/rclone/providers', authMiddleware, async (req, res) => {
   try {
     const result = await rcloneRC('/config/providers');
-    const providers = (result.providers || []).map((p) => ({
-      name: p.Name,
-      description: p.Description,
-      prefix: p.Prefix,
+    // Rclone RC returns providers with varying field names, normalize them
+    const raw = result.providers || [];
+    const providers = raw.map((p) => ({
+      name: p.Name || p.name || '',
+      description: p.Description || p.description || '',
+      prefix: p.Prefix || p.prefix || p.Name || p.name || '',
     }));
     res.json({ providers });
   } catch (err) {
