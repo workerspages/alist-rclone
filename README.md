@@ -86,16 +86,18 @@ docker compose up -d
 
 ## 🌐 访问说明
 
-部署完成后，通过浏览器访问 `http://你的IP:端口` 即可打开 Web 控制台。
+部署完成后：
+- **Alist 文件管理**：访问 `http://你的IP:端口/` 即可打开 Alist
+- **Web 管理控制台**：访问 `http://你的IP:端口/console/` 管理 Rclone 配置、查看日志等
 
 ### 路由说明
 
 | 路径 | 服务 | 说明 |
 |------|------|------|
-| `/` | Web 管理控制台 | 统一管理界面，需登录 |
-| `/alist/` | Alist 文件管理 | Alist 原生界面 |
+| `/` | Alist 文件管理 | Alist 原生界面（根路径直接访问） |
+| `/console/` | Web 管理控制台 | 统一管理界面，需登录 |
 | `/rclone/` | Rclone Web GUI | Rclone 原生管理界面 |
-| `/api/` | 后端 API | 控制台后端接口 |
+| `/console-api/` | 后端 API | 控制台后端接口 |
 
 ### Web 控制台功能
 

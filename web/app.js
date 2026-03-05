@@ -68,7 +68,7 @@ const App = {
     // ========================
     async checkAuth() {
         try {
-            const res = await this.api('GET', '/api/auth/check');
+            const res = await this.api('GET', '/console-api/auth/check');
             if (res.valid) {
                 this.showApp(res.username);
             } else {
@@ -90,7 +90,7 @@ const App = {
         errorEl.style.display = 'none';
 
         try {
-            const res = await fetch('/api/login', {
+            const res = await fetch('/console-api/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password }),
@@ -194,7 +194,7 @@ const App = {
 
     async loadStatus() {
         try {
-            const data = await this.api('GET', '/api/status');
+            const data = await this.api('GET', '/console-api/status');
             // Alist status
             const alistStatus = document.querySelector('#stat-alist .stat-status');
             alistStatus.textContent = data.alist === 'running' ? '运行中' : '已停止';
@@ -212,7 +212,7 @@ const App = {
 
     async loadRemoteCount() {
         try {
-            const data = await this.api('GET', '/api/rclone/remotes');
+            const data = await this.api('GET', '/console-api/rclone/remotes');
             document.getElementById('stat-remotes').textContent = (data.remotes?.length || 0) + ' 个';
         } catch {
             document.getElementById('stat-remotes').textContent = '-';
@@ -236,7 +236,7 @@ const App = {
         const container = document.getElementById('remotes-list');
         container.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>加载中...</p></div>';
         try {
-            const data = await this.api('GET', '/api/rclone/remotes');
+            const data = await this.api('GET', '/console-api/rclone/remotes');
             if (!data.remotes || data.remotes.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
@@ -428,7 +428,7 @@ const App = {
             if (val) parameters[el.dataset.param] = val;
         });
         try {
-            await this.api('POST', '/api/rclone/remote', { name, type, parameters });
+            await this.api('POST', '/console-api/rclone/remote', { name, type, parameters });
             this.toast(`远程存储 "${name}" 创建成功`, 'success');
             this.closeModal();
             this.loadRemotes();
@@ -441,7 +441,7 @@ const App = {
     async deleteRemote(name) {
         if (!confirm(`确定删除远程存储 "${name}" 吗？`)) return;
         try {
-            await this.api('DELETE', '/api/rclone/remote/' + encodeURIComponent(name));
+            await this.api('DELETE', '/console-api/rclone/remote/' + encodeURIComponent(name));
             this.toast(`远程存储 "${name}" 已删除`, 'success');
             this.loadRemotes();
             this.loadRemoteCount();
@@ -456,7 +456,7 @@ const App = {
     async restartService(service) {
         try {
             this.toast(`正在重启 ${service}...`, 'info');
-            await this.api('POST', '/api/service/restart', { service });
+            await this.api('POST', '/console-api/service/restart', { service });
             this.toast(`${service} 已重启`, 'success');
             setTimeout(() => this.loadStatus(), 2000);
         } catch (err) {
@@ -470,7 +470,7 @@ const App = {
     loadAlistFrame() {
         const frame = document.getElementById('alist-frame');
         if (!frame.src || frame.src === window.location.href) {
-            frame.src = '/alist/';
+            frame.src = '/';
         }
     },
 
@@ -488,7 +488,7 @@ const App = {
         const viewer = document.getElementById('log-viewer');
         viewer.textContent = '加载中...';
         try {
-            const data = await this.api('GET', `/api/logs/${service}?lines=200`);
+            const data = await this.api('GET', `/console-api/logs/${service}?lines=200`);
             viewer.textContent = data.log || '无日志';
         } catch {
             viewer.textContent = '加载日志失败';
