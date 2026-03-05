@@ -35,6 +35,7 @@ RUN apk add --no-cache \
     tzdata \
     bash \
     unzip \
+    apache2-utils \
     && rm -rf /var/cache/apk/*
 
 # Download Alist (use TARGETARCH from Buildx)

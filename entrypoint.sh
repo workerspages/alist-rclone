@@ -43,6 +43,10 @@ fi
 export WEB_USERNAME="${WEB_USERNAME:-admin}"
 export WEB_PASSWORD="${WEB_PASSWORD:-admin}"
 
+# ---- Generate nginx Basic Auth file ----
+echo "[Init] Generating Basic Auth credentials..."
+htpasswd -cb /etc/nginx/.htpasswd "$WEB_USERNAME" "$WEB_PASSWORD"
+
 # ---- Create log files ----
 touch /var/log/alist.log /var/log/rclone.log /var/log/api.log
 

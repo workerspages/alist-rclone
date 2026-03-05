@@ -39,11 +39,7 @@ function rcloneRC(command, params = {}) {
       port: url.port,
       path: url.pathname,
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(data),
-        'Authorization': 'Basic ' + Buffer.from(WEB_USERNAME + ':' + WEB_PASSWORD).toString('base64'),
-      },
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
       timeout: 10000,
     };
     const req = http.request(options, (resp) => {
