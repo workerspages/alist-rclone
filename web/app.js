@@ -149,6 +149,7 @@ const App = {
         const titles = {
             dashboard: '仪表板',
             'rclone-config': 'Rclone 配置管理',
+            transfer: '文件传输',
             alist: 'Alist 文件管理',
             'rclone-gui': 'Rclone Web GUI',
             logs: '日志查看器',
@@ -157,6 +158,7 @@ const App = {
         // Load page data
         if (page === 'dashboard') this.loadDashboard();
         if (page === 'rclone-config') this.loadRemotes();
+        if (page === 'transfer') this.loadTransferPage();
         if (page === 'alist') this.loadAlistFrame();
         if (page === 'rclone-gui') this.loadRcloneFrame();
         if (page === 'logs') this.loadLogs(this.currentLogService);
@@ -519,6 +521,188 @@ const App = {
     escapeHtml(str) {
         const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
         return String(str).replace(/[&<>"']/g, (c) => map[c]);
+    },
+
+    // ========================
+    // File Transfer
+    // ========================
+    browseTarget: null,
+    browsePath: '/',
+    browseRemoteName: '',
+    jobPollInterval: null,
+
+    async loadTransferPage() {
+        try {
+            const data = await this.api('GET', '/console-api/rclone/remotes');
+            const remotes = data.remotes || [];
+            const options = '<option value="">-- 选择远程存储 --</option>' +
+                remotes.map(r => `<option value="${this.escapeHtml(r.name)}">${this.escapeHtml(r.name)} (${this.escapeHtml(r.type || '')})</option>`).join('');
+            document.getElementById('transfer-src-remote').innerHTML = options;
+            document.getElementById('transfer-dst-remote').innerHTML = options;
+        } catch (err) {
+            this.toast('加载远程存储列表失败', 'error');
+        }
+        this.refreshJobs();
+    },
+
+    onTransferRemoteChange(side) { },
+
+    async browseRemote(target) {
+        const remote = document.getElementById(`transfer-${target}-remote`).value;
+        if (!remote) { this.toast('请先选择远程存储', 'error'); return; }
+        this.browseTarget = target;
+        this.browseRemoteName = remote;
+        this.browsePath = document.getElementById(`transfer-${target}-path`).value || '/';
+        document.getElementById('browse-modal-title').textContent = '浏览: ' + remote;
+        document.getElementById('browse-modal').classList.add('active');
+        this.loadBrowseDir();
+    },
+
+    async loadBrowseDir() {
+        const list = document.getElementById('browse-file-list');
+        const pathEl = document.getElementById('browse-current-path');
+        pathEl.textContent = this.browseRemoteName + ':' + this.browsePath;
+        list.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>加载中...</p></div>';
+        try {
+            const fs = this.browseRemoteName + ':' + this.browsePath;
+            const data = await this.api('POST', '/console-api/rclone/ls', { fs });
+            const items = data.list || [];
+            if (items.length === 0) {
+                list.innerHTML = '<div class="empty-state"><p>空目录</p></div>';
+                return;
+            }
+            const dirs = items.filter(i => i.IsDir).sort((a, b) => a.Name.localeCompare(b.Name));
+            const files = items.filter(i => !i.IsDir).sort((a, b) => a.Name.localeCompare(b.Name));
+            list.innerHTML = [...dirs, ...files].map(item => {
+                const icon = item.IsDir ? '📁' : '📄';
+                const size = item.IsDir ? '' : this.formatSize(item.Size);
+                const cls = item.IsDir ? 'file-item dir' : 'file-item';
+                const onclick = item.IsDir ? `App.browseTo('${this.escapeHtml(item.Path)}')` : '';
+                return `<div class="${cls}" ${onclick ? 'onclick="' + onclick + '"' : ''}>
+                    <span class="file-icon">${icon}</span>
+                    <span class="file-name">${this.escapeHtml(item.Name)}</span>
+                    <span class="file-size">${size}</span>
+                </div>`;
+            }).join('');
+        } catch (err) {
+            list.innerHTML = `<div class="empty-state"><p>加载失败: ${this.escapeHtml(err.message)}</p></div>`;
+        }
+    },
+
+    browseTo(path) {
+        this.browsePath = '/' + path;
+        this.loadBrowseDir();
+    },
+
+    browseUp() {
+        const parts = this.browsePath.replace(/\/$/, '').split('/');
+        parts.pop();
+        this.browsePath = parts.join('/') || '/';
+        this.loadBrowseDir();
+    },
+
+    selectBrowsePath() {
+        document.getElementById(`transfer-${this.browseTarget}-path`).value = this.browsePath;
+        this.closeBrowseModal();
+    },
+
+    closeBrowseModal() {
+        document.getElementById('browse-modal').classList.remove('active');
+    },
+
+    formatSize(bytes) {
+        if (!bytes || bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    },
+
+    async startTransfer(mode) {
+        const srcRemote = document.getElementById('transfer-src-remote').value;
+        const dstRemote = document.getElementById('transfer-dst-remote').value;
+        const srcPath = document.getElementById('transfer-src-path').value || '/';
+        const dstPath = document.getElementById('transfer-dst-path').value || '/';
+        if (!srcRemote || !dstRemote) {
+            this.toast('请选择源和目标远程存储', 'error'); return;
+        }
+        const srcFs = srcRemote + ':' + srcPath;
+        const dstFs = dstRemote + ':' + dstPath;
+        const modeNames = { copy: '复制', sync: '同步', move: '移动' };
+        if (mode === 'sync' && !confirm('同步会删除目标中源不存在的文件，确定继续？')) return;
+        if (mode === 'move' && !confirm('移动完成后源文件将被删除，确定继续？')) return;
+        try {
+            this.toast(`正在启动${modeNames[mode]}任务...`, 'info');
+            await this.api('POST', `/console-api/rclone/${mode}`, { srcFs, dstFs, _async: true });
+            this.toast(`${modeNames[mode]}任务已启动: ${srcFs} → ${dstFs}`, 'success');
+            this.startJobPolling();
+        } catch (err) {
+            this.toast('任务启动失败: ' + err.message, 'error');
+        }
+    },
+
+    startJobPolling() {
+        this.refreshJobs();
+        if (this.jobPollInterval) clearInterval(this.jobPollInterval);
+        this.jobPollInterval = setInterval(() => {
+            if (this.currentPage === 'transfer') this.refreshJobs();
+            else { clearInterval(this.jobPollInterval); this.jobPollInterval = null; }
+        }, 3000);
+    },
+
+    async refreshJobs() {
+        const container = document.getElementById('transfer-stats');
+        try {
+            const stats = await this.api('GET', '/console-api/rclone/stats');
+            const jobs = await this.api('GET', '/console-api/rclone/jobs');
+            const jobIds = jobs.jobids || [];
+            if (stats.transferring || stats.bytes > 0 || jobIds.length > 0) {
+                let html = '<div class="stats-summary">';
+                html += `<div class="stat-row"><span>已传输</span><span>${this.formatSize(stats.bytes || 0)}</span></div>`;
+                html += `<div class="stat-row"><span>速度</span><span>${this.formatSize(stats.speed || 0)}/s</span></div>`;
+                html += `<div class="stat-row"><span>文件数</span><span>${stats.transfers || 0} / ${(stats.totalTransfers || 0)}</span></div>`;
+                html += `<div class="stat-row"><span>检查数</span><span>${stats.checks || 0} / ${(stats.totalChecks || 0)}</span></div>`;
+                if (stats.errors > 0) html += `<div class="stat-row error"><span>错误</span><span>${stats.errors}</span></div>`;
+                html += '</div>';
+                if (stats.transferring && stats.transferring.length > 0) {
+                    html += '<div class="active-transfers">';
+                    stats.transferring.forEach(t => {
+                        const pct = t.percentage || 0;
+                        html += `<div class="transfer-item">
+                            <div class="transfer-item-name" title="${this.escapeHtml(t.name)}">${this.escapeHtml(t.name)}</div>
+                            <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+                            <div class="transfer-item-info">${pct}% · ${this.formatSize(t.speed || 0)}/s · ${this.formatSize(t.bytes || 0)}/${this.formatSize(t.size || 0)}</div>
+                        </div>`;
+                    });
+                    html += '</div>';
+                }
+                if (jobIds.length > 0) {
+                    html += `<div class="job-actions"><button class="btn btn-secondary btn-sm" onclick="App.stopAllJobs()">⏹ 停止所有任务</button></div>`;
+                } else if (!stats.transferring || stats.transferring.length === 0) {
+                    html += '<div class="transfer-complete"><p>✅ 所有任务已完成</p></div>';
+                    if (this.jobPollInterval) { clearInterval(this.jobPollInterval); this.jobPollInterval = null; }
+                }
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = '<div class="empty-state"><p>暂无传输任务</p></div>';
+                if (this.jobPollInterval) { clearInterval(this.jobPollInterval); this.jobPollInterval = null; }
+            }
+        } catch {
+            container.innerHTML = '<div class="empty-state"><p>获取状态失败</p></div>';
+        }
+    },
+
+    async stopAllJobs() {
+        try {
+            const jobs = await this.api('GET', '/console-api/rclone/jobs');
+            for (const id of (jobs.jobids || [])) {
+                await this.api('POST', '/console-api/rclone/job/stop', { jobid: id });
+            }
+            this.toast('所有任务已停止', 'success');
+            setTimeout(() => this.refreshJobs(), 1000);
+        } catch (err) {
+            this.toast('停止失败: ' + err.message, 'error');
+        }
     },
 };
 

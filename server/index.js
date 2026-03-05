@@ -206,13 +206,92 @@ app.get('/api/logs/:service', authMiddleware, (req, res) => {
 });
 
 // ========================
-// Rclone Mount & Sync Operations
+// File Operations
 // ========================
-app.get('/api/rclone/operations/about', authMiddleware, async (req, res) => {
+// List files in a remote path
+app.post('/api/rclone/ls', authMiddleware, async (req, res) => {
   try {
-    const { remote } = req.query;
-    if (!remote) return res.status(400).json({ error: 'remote is required' });
-    const result = await rcloneRC('/operations/about', { fs: remote + ':' });
+    const { fs: remotePath, remote, path: dirPath } = req.body;
+    const fsStr = remotePath || (remote ? remote + ':' + (dirPath || '') : null);
+    if (!fsStr) return res.status(400).json({ error: 'fs or remote is required' });
+    const result = await rcloneRC('/operations/list', { fs: fsStr, remote: '' });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Copy files between remotes
+app.post('/api/rclone/copy', authMiddleware, async (req, res) => {
+  try {
+    const { srcFs, dstFs, _async } = req.body;
+    if (!srcFs || !dstFs) return res.status(400).json({ error: 'srcFs and dstFs are required' });
+    const result = await rcloneRC('/sync/copy', { srcFs, dstFs, _async: _async !== false });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Sync files between remotes
+app.post('/api/rclone/sync', authMiddleware, async (req, res) => {
+  try {
+    const { srcFs, dstFs, _async } = req.body;
+    if (!srcFs || !dstFs) return res.status(400).json({ error: 'srcFs and dstFs are required' });
+    const result = await rcloneRC('/sync/sync', { srcFs, dstFs, _async: _async !== false });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Move files between remotes
+app.post('/api/rclone/move', authMiddleware, async (req, res) => {
+  try {
+    const { srcFs, dstFs, _async } = req.body;
+    if (!srcFs || !dstFs) return res.status(400).json({ error: 'srcFs and dstFs are required' });
+    const result = await rcloneRC('/sync/move', { srcFs, dstFs, _async: _async !== false });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get transfer stats
+app.get('/api/rclone/stats', authMiddleware, async (req, res) => {
+  try {
+    const result = await rcloneRC('/core/stats');
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// List running jobs
+app.get('/api/rclone/jobs', authMiddleware, async (req, res) => {
+  try {
+    const result = await rcloneRC('/job/list');
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get job status
+app.get('/api/rclone/job/:id', authMiddleware, async (req, res) => {
+  try {
+    const result = await rcloneRC('/job/status', { jobid: parseInt(req.params.id) });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Stop a job
+app.post('/api/rclone/job/stop', authMiddleware, async (req, res) => {
+  try {
+    const { jobid } = req.body;
+    const result = await rcloneRC('/job/stop', { jobid });
     res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
