@@ -87,8 +87,33 @@ docker compose up -d
 | `ALIST_ADMIN_USERNAME` | `admin` | ❌ | Alist 管理员用户名 |
 | `ALIST_ADMIN_PASSWORD` | `admin` | ⚠️ | Alist 管理员密码，**强烈建议修改** |
 | `TZ` | `Asia/Shanghai` | ❌ | 容器时区 |
+| `DB_TYPE` | `sqlite3` | ❌ | 外部数据库类型，如 `mysql` / `postgres`。配置外部数据库（如 TiDB）时必须设置为 `mysql` |
+| `DB_HOST` | - | ❌ | 外部数据库地址（主机名或 IP） |
+| `DB_PORT` | `3306` | ❌ | 外部数据库端口（TiDB Cloud 免费集群多为 `4000`） |
+| `DB_USER` | `root` | ❌ | 外部数据库用户名 |
+| `DB_PASS` | - | ❌ | 外部数据库密码 |
+| `DB_NAME` | `alist` | ❌ | 外部数据库库名（需要提前在数据库中创建） |
+| `DB_TABLE_PREFIX` | `alist_` | ❌ | 外部数据库表前缀 |
+| `DB_SSL_MODE` | - | ❌ | 外部数据库 SSL 模式，例如 TiDB Cloud 需填写 `true` |
 
 > ⚠️ **安全提示**：首次部署时请务必修改 `WEB_PASSWORD` 和 `ALIST_ADMIN_PASSWORD`，不要使用默认值。
+
+### 🌐 外部数据库 (TiDB Cloud) 连接示例:
+
+以免费的 TiDB Cloud Serverless 集群为例，在部署时注入以下环境变量即可：
+
+```yaml
+    environment:
+      - DB_TYPE=mysql
+      - DB_HOST=gateway01.us-west-2.prod.aws.tidbcloud.com
+      - DB_PORT=4000
+      - DB_USER=your_prefix.root
+      - DB_PASS=your_tidb_password
+      - DB_NAME=alist
+      - DB_SSL_MODE=true
+```
+
+*(注意：需提前在 TiDB Cloud 管理面板执行 `CREATE DATABASE alist;` 创建目标库)*
 
 ---
 

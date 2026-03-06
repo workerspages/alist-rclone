@@ -17,12 +17,111 @@ if [ ! -f /data/alist/config.json ]; then
     echo "[Init] First run, creating Alist config..."
     mkdir -p /data/alist
     cd /data/alist
-    /app/alist server --data /data/alist &
-    ALIST_PID=$!
-    # Wait for Alist to initialize
-    sleep 3
-    kill $ALIST_PID 2>/dev/null || true
-    wait $ALIST_PID 2>/dev/null || true
+
+    DB_TYPE="${DB_TYPE:-sqlite3}"
+    DB_HOST="${DB_HOST:-127.0.0.1}"
+    DB_PORT="${DB_PORT:-3306}"
+    DB_USER="${DB_USER:-root}"
+    DB_PASS="${DB_PASS:-password}"
+    DB_NAME="${DB_NAME:-alist}"
+    DB_TABLE_PREFIX="${DB_TABLE_PREFIX:-alist_}"
+    DB_SSL_MODE="${DB_SSL_MODE:-}"
+    
+    # If using sqlite3, let Alist generate the default config by running it once
+    if [ "$DB_TYPE" = "sqlite3" ]; then
+        /app/alist server --data /data/alist &
+        ALIST_PID=$!
+        sleep 3
+        kill $ALIST_PID 2>/dev/null || true
+        wait $ALIST_PID 2>/dev/null || true
+    else
+        echo "[Init] Configuring external database ($DB_TYPE)..."
+        # Generate config.json for external DB
+        cat > /data/alist/config.json <<EOF
+{
+  "force": false,
+  "site_url": "",
+  "cdn": "",
+  "jwt_secret": "$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)",
+  "token_expires_in": 48,
+  "database": {
+    "type": "$DB_TYPE",
+    "host": "$DB_HOST",
+    "port": $DB_PORT,
+    "user": "$DB_USER",
+    "password": "$DB_PASS",
+    "name": "$DB_NAME",
+    "db_file": "data.db",
+    "table_prefix": "$DB_TABLE_PREFIX",
+    "ssl_mode": "$DB_SSL_MODE",
+    "dsn": ""
+  },
+  "meilisearch": {
+    "host": "http://localhost:7700",
+    "api_key": "",
+    "index_prefix": ""
+  },
+  "scheme": {
+    "address": "0.0.0.0",
+    "http_port": 5244,
+    "https_port": -1,
+    "force_https": false,
+    "cert_file": "",
+    "key_file": "",
+    "unix_file": "",
+    "unix_file_perms": ""
+  },
+  "temp_dir": "data/temp",
+  "bleve_dir": "data/bleve",
+  "dist_dir": "",
+  "log": {
+    "enable": true,
+    "name": "log.log",
+    "max_size": 50,
+    "max_backups": 30,
+    "max_age": 28,
+    "compress": false
+  },
+  "delayed_start": 0,
+  "max_connections": 0,
+  "tls_insecure_skip_verify": true,
+  "tasks": {
+    "download": {
+      "workers": 5,
+      "max_retry": 1
+    },
+    "transfer": {
+      "workers": 5,
+      "max_retry": 2
+    },
+    "upload": {
+      "workers": 5,
+      "max_retry": 0
+    },
+    "copy": {
+      "workers": 5,
+      "max_retry": 2
+    }
+  },
+  "cors": {
+    "allow_origins": [
+      "*"
+    ],
+    "allow_methods": [
+      "*"
+    ],
+    "allow_headers": [
+      "*"
+    ]
+  },
+  "s3": {
+    "enable": false,
+    "port": 5246,
+    "ssl": false
+  }
+}
+EOF
+    fi
 fi
 
 # Set Alist admin password
