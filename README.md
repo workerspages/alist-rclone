@@ -10,6 +10,7 @@
 - ☁️ **Rclone 云同步** — 强大的云存储挂载和同步工具（wiserain mod 版本）
 - 🎛️ **统一 Web 控制台** — 在浏览器中管理所有配置和操作
 - 🔄 **高级文件传输** — 支持在不同云盘间直接互拷，支持并发、过滤等高级传输参数
+- ⚙️ **配置编辑功能** — 支持在图形界面上直接修改现有的 Rclone 远程存储配置参数
 - 🔐 **安全登录** — 用户名密码认证保护
 - 📊 **状态监控与日志** — 实时查看服务运行状态及各组件日志
 - 🏗️ **多架构支持** — 同时支持 `amd64` 和 `arm64`
@@ -105,8 +106,8 @@ docker compose up -d
 ### Web 控制台功能
 
 1. **仪表板** — 查看 Alist 和 Rclone 运行状态、运行时间、远程存储数量
-2. **Rclone 配置** — 添加/测试/删除远程存储，包括强大的实时 **连通性探测功能**
-3. **文件传输** — 支持在多个 Rclone 配置间进行文件复制、移动和同步操作。包含高级参数（如 `--transfers`并发数，`--exclude`排除等）
+2. **Rclone 配置** — 添加/修改/测试/删除远程存储，包括强大的实时 **连通性探测功能**
+3. **定时任务** — 支持在多个 Rclone 配置间进行定时和手动文件复制、移动和同步操作。包含高级参数（如 `--transfers`并发数，`--exclude`排除等）
 4. **Alist 文件管理** — 内嵌 Alist 管理主打界面，一站式管理所有文件
 5. **日志** — 在线查看 Alist、Rclone、Nginx、API 的运行日志
 
@@ -132,12 +133,12 @@ docker compose up -d
 
 ## 🔧 使用示例
 
-### 添加 Rclone 远程存储
+### 添加和修改 Rclone 远程存储
 
 1. 登录 Web 控制台
 2. 进入「Rclone 配置」页面
-3. 点击「添加远程存储」
-4. 选择存储类型，填写参数，点击保存
+3. **添加**：点击「添加远程存储」，选择存储类型，填写参数，点击保存
+4. **修改**：点击现有存储卡片上的「编辑」按钮，修改密码及令牌等参数，保存更新
 
 ### 在 Alist 中使用 Rclone 存储
 
@@ -155,6 +156,15 @@ Rclone 配置好远程存储后，可以在 Alist 中添加存储驱动时选择
 |------|------|
 | GitHub Container Registry | `ghcr.io/workerspages/alist-rclone:latest` |
 | Docker Hub | `workerspages/alist-rclone:latest` |
+
+---
+
+## ⬆️ 关于版本更新
+
+本项目内置的 `Alist` 和被修改过的 `Rclone` （wiserain版本）都配置为在构建时自动拉取最新的 Release 标签。要将您的环境更新至这两者的最新版本，您只需重新构建或拉取最新的 Docker 镜像。
+
+- **如果您使用 GitHub 仓库 (推荐)**：在 GitHub 上的 `Actions` 页面手动运行一次 `Build and Push Docker Image`，构建出最新镜像后，用 `docker compose pull && docker compose up -d` 重新部署即可。
+- **如果您手动管理版本**：修改代码提交 `git push` 到仓库即可触发自动构建动作。也可直接在服务器执行强制构建：`docker compose build --no-cache && docker compose up -d`。
 
 ---
 
