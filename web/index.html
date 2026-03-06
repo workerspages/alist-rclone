@@ -388,44 +388,10 @@
                                 <!-- Advanced Options in Task Modal -->
                                 <details class="advanced-options" id="task-advanced">
                                     <summary>⚙️ 高级选项</summary>
-                                    <div class="advanced-grid">
-                                        <div class="adv-group">
-                                            <label>并发传输数</label>
-                                            <input type="number" id="task-opt-transfers" placeholder="4" min="1">
-                                        </div>
-                                        <div class="adv-group">
-                                            <label>检查线程数</label>
-                                            <input type="number" id="task-opt-checkers" placeholder="8" min="1">
-                                        </div>
-                                        <div class="adv-group">
-                                            <label>缓冲区大小</label>
-                                            <input type="text" id="task-opt-buffer-size" placeholder="16M">
-                                        </div>
-                                        <div class="adv-group">
-                                            <label>最大文件大小</label>
-                                            <input type="text" id="task-opt-max-size" placeholder="例如: 5G">
-                                        </div>
-                                        <div class="adv-group">
-                                            <label>最小文件大小</label>
-                                            <input type="text" id="task-opt-min-size" placeholder="例如: 1K">
-                                        </div>
-                                        <div class="adv-group">
-                                            <label>超时时间</label>
-                                            <input type="text" id="task-opt-timeout" placeholder="5m0s">
-                                        </div>
-                                    </div>
-                                    <div class="adv-group" style="margin-top:12px">
-                                        <label>包含规则 (--include)</label>
-                                        <input type="text" id="task-opt-include" placeholder="例如: /{手机备份}/**">
-                                    </div>
-                                    <div class="adv-group" style="margin-top:8px">
-                                        <label>排除规则 (--exclude)</label>
-                                        <input type="text" id="task-opt-exclude" placeholder="例如: *.tmp">
-                                    </div>
-                                    <div class="adv-checkboxes" style="margin-top:12px">
-                                        <label class="adv-checkbox"><input type="checkbox" id="task-opt-ignore-errors"><span>忽略错误</span></label>
-                                        <label class="adv-checkbox"><input type="checkbox" id="task-opt-size-only"><span>仅比较大小</span></label>
-                                        <label class="adv-checkbox"><input type="checkbox" id="task-opt-check-first"><span>先检查再传输</span></label>
+                                    <div class="form-group" style="margin-top: 12px;">
+                                        <label for="task-opt-custom">自定义 Rclone 参数</label>
+                                        <textarea id="task-opt-custom" rows="3" placeholder="例如: --transfers 4 --checkers 8 --bwlimit 10M --ignore-errors --exclude *.tmp"></textarea>
+                                        <small class="cron-hint" style="color:var(--text-muted);font-size:0.73rem;margin-top:6px;display:block;line-height:1.4">输入 Rclone 原生命令行参数。支持多个参数，使用空格分隔。</small>
                                     </div>
                                 </details>
                             </div>

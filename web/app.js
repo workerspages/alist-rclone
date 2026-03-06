@@ -676,6 +676,90 @@ const App = {
         return String(str).replace(/[&<>"']/g, (c) => map[c]);
     },
 
+    parseRcloneArgs(argStr) {
+        if (!argStr) return {};
+        const config = {};
+        const filter = {};
+        const filterFlags = ['max-size', 'min-size', 'max-age', 'min-age', 'include', 'exclude', 'filter'];
+        
+        const matches = argStr.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
+        
+        for (let i = 0; i < matches.length; i++) {
+            let token = matches[i];
+            if (token.startsWith('--')) {
+                let flag = token.substring(2);
+                let value = true;
+                
+                if (flag.includes('=')) {
+                    const parts = flag.split('=');
+                    flag = parts[0];
+                    value = parts.slice(1).join('=').replace(/^"|"$/g, '');
+                } else if (i + 1 < matches.length && !matches[i+1].startsWith('-')) {
+                    value = matches[++i].replace(/^"|"$/g, '');
+                }
+                
+                if (typeof value === 'string' && /^\d+$/.test(value)) {
+                    if (['transfers', 'checkers', 'retries'].includes(flag)) {
+                        value = parseInt(value, 10);
+                    }
+                }
+                
+                const pascalKey = flag.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join('');
+                
+                if (filterFlags.includes(flag)) {
+                    if (['include', 'exclude', 'filter'].includes(flag)) {
+                        const ruleKey = pascalKey + 'Rule';
+                        if (!filter[ruleKey]) filter[ruleKey] = [];
+                        filter[ruleKey].push(value);
+                    } else {
+                        filter[pascalKey] = value;
+                    }
+                } else {
+                    config[pascalKey] = value;
+                }
+            }
+        }
+        
+        const res = {};
+        if (Object.keys(config).length) res._config = config;
+        if (Object.keys(filter).length) res._filter = filter;
+        return res;
+    },
+
+    stringifyRcloneArgs(advancedOptions) {
+        if (!advancedOptions) return '';
+        const args = [];
+        const toKebab = (str) => str.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`).replace(/^-/, '');
+        
+        const cfg = advancedOptions._config || {};
+        for (const [k, v] of Object.entries(cfg)) {
+            const flag = '--' + toKebab(k);
+            if (v === true) {
+                args.push(flag);
+            } else {
+                const valStr = String(v).includes(' ') ? `"${v}"` : String(v);
+                args.push(`${flag} ${valStr}`);
+            }
+        }
+        
+        const flt = advancedOptions._filter || {};
+        for (const [k, v] of Object.entries(flt)) {
+            if (k.endsWith('Rule') && Array.isArray(v)) {
+                const flagName = toKebab(k.replace('Rule', ''));
+                v.forEach(rule => {
+                    const valStr = rule.includes(' ') ? `"${rule}"` : rule;
+                    args.push(`--${flagName} ${valStr}`);
+                });
+            } else {
+                const flag = '--' + toKebab(k);
+                const valStr = String(v).includes(' ') ? `"${v}"` : String(v);
+                args.push(`${flag} ${valStr}`);
+            }
+        }
+        
+        return args.join(' ');
+    },
+
     // ========================
     // Scheduled Tasks
     // ========================
@@ -778,15 +862,7 @@ const App = {
         document.getElementById('task-cron-preset').value = '';
         document.getElementById('task-edit-id').value = '';
         // Reset advanced
-        ['task-opt-transfers', 'task-opt-checkers', 'task-opt-buffer-size', 'task-opt-max-size', 'task-opt-min-size', 'task-opt-timeout'].forEach(id => {
-            const el = document.getElementById(id); if (el) el.value = '';
-        });
-        ['task-opt-include', 'task-opt-exclude'].forEach(id => {
-            const el = document.getElementById(id); if (el) el.value = '';
-        });
-        ['task-opt-ignore-errors', 'task-opt-size-only', 'task-opt-check-first'].forEach(id => {
-            const el = document.getElementById(id); if (el) el.checked = false;
-        });
+        document.getElementById('task-opt-custom').value = '';
 
         if (editId) {
             document.getElementById('task-modal-title').textContent = '编辑任务';
@@ -807,20 +883,9 @@ const App = {
                     const presetOpts = Array.from(presetSelect.options).map(o => o.value);
                     presetSelect.value = presetOpts.includes(task.cron) ? task.cron : '';
                     // Advanced options
-                    const adv = task.advancedOptions || {};
-                    const cfg = adv._config || {};
-                    const flt = adv._filter || {};
-                    if (cfg.Transfers) document.getElementById('task-opt-transfers').value = cfg.Transfers;
-                    if (cfg.Checkers) document.getElementById('task-opt-checkers').value = cfg.Checkers;
-                    if (cfg.BufferSize) document.getElementById('task-opt-buffer-size').value = cfg.BufferSize;
-                    if (cfg.Timeout) document.getElementById('task-opt-timeout').value = cfg.Timeout;
-                    if (flt.MaxSize) document.getElementById('task-opt-max-size').value = flt.MaxSize;
-                    if (flt.MinSize) document.getElementById('task-opt-min-size').value = flt.MinSize;
-                    if (flt.IncludeRule?.[0]) document.getElementById('task-opt-include').value = flt.IncludeRule[0];
-                    if (flt.ExcludeRule?.[0]) document.getElementById('task-opt-exclude').value = flt.ExcludeRule[0];
-                    if (cfg.IgnoreErrors) document.getElementById('task-opt-ignore-errors').checked = true;
-                    if (cfg.SizeOnly) document.getElementById('task-opt-size-only').checked = true;
-                    if (cfg.CheckFirst) document.getElementById('task-opt-check-first').checked = true;
+                    if (task.advancedOptions) {
+                        document.getElementById('task-opt-custom').value = App.stringifyRcloneArgs(task.advancedOptions);
+                    }
                 }
             } catch (err) {
                 this.toast('加载任务详情失败', 'error');
@@ -854,25 +919,8 @@ const App = {
         if (!srcRemote || !dstRemote) { this.toast('请选择源和目标存储', 'error'); return; }
 
         // Collect advanced options
-        const _config = {};
-        const _filter = {};
-        const getVal = (id) => document.getElementById(id)?.value?.trim() || '';
-        const getCheck = (id) => document.getElementById(id)?.checked || false;
-        if (getVal('task-opt-transfers')) _config.Transfers = parseInt(getVal('task-opt-transfers'));
-        if (getVal('task-opt-checkers')) _config.Checkers = parseInt(getVal('task-opt-checkers'));
-        if (getVal('task-opt-buffer-size')) _config.BufferSize = getVal('task-opt-buffer-size');
-        if (getVal('task-opt-timeout')) _config.Timeout = getVal('task-opt-timeout');
-        if (getCheck('task-opt-ignore-errors')) _config.IgnoreErrors = true;
-        if (getCheck('task-opt-check-first')) _config.CheckFirst = true;
-        if (getCheck('task-opt-size-only')) _config.SizeOnly = true;
-        if (getVal('task-opt-max-size')) _filter.MaxSize = getVal('task-opt-max-size');
-        if (getVal('task-opt-min-size')) _filter.MinSize = getVal('task-opt-min-size');
-        if (getVal('task-opt-include')) _filter.IncludeRule = [getVal('task-opt-include')];
-        if (getVal('task-opt-exclude')) _filter.ExcludeRule = [getVal('task-opt-exclude')];
-
-        const advancedOptions = {};
-        if (Object.keys(_config).length) advancedOptions._config = _config;
-        if (Object.keys(_filter).length) advancedOptions._filter = _filter;
+        const customArgsStr = document.getElementById('task-opt-custom').value.trim();
+        const advancedOptions = App.parseRcloneArgs(customArgsStr);
 
         const body = { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, advancedOptions };
 
