@@ -31,7 +31,7 @@ docker run -d \
   -e WEB_PASSWORD=your_password \
   -e ALIST_ADMIN_PASSWORD=your_alist_password \
   -e TZ=Asia/Shanghai \
-  ghcr.io/workerspages/alist-rclone:latest
+  ghcr.io/workerspages/alist-rclone:main
 ```
 
 > 💡 `-v $(pwd)/host:/opt/host` 用于将宿主机目录挂载到容器中。容器会自动在 Rclone 配置中添加一个名为 `host` 的本地驱动，方便你在网页上将网盘文件与宿主机直接互拷。
@@ -43,7 +43,7 @@ docker run -d \
 ```yaml
 services:
   alist-rclone:
-    image: ghcr.io/workerspages/alist-rclone:latest
+    image: ghcr.io/workerspages/alist-rclone:main
     container_name: alist-rclone
     restart: unless-stopped
     ports:
@@ -71,7 +71,7 @@ docker compose up -d
 
 大多数 PaaS 平台（如 Railway、Render、Zeabur 等）支持直接使用 Docker 镜像部署：
 
-1. **镜像地址**：`ghcr.io/workerspages/alist-rclone:latest`
+1. **镜像地址**：`ghcr.io/workerspages/alist-rclone:main`
 2. **端口**：设置为 `80`
 3. **环境变量**：按下方表格配置
 4. **持久化存储**：挂载 `/data` 目录（如平台支持）
@@ -112,6 +112,7 @@ docker compose up -d
       - DB_PASS=your_tidb_password
       - DB_NAME=alist
       - DB_SSL_MODE=true
+      - CUSTOM_CA_CERT_PATH=/etc/ssl/certs/ca-certificates.crt
 ```
 
 *(注意：需提前在 TiDB Cloud 管理面板执行 `CREATE DATABASE alist;` 创建目标库)*
@@ -207,8 +208,8 @@ Rclone 配置好远程存储后，可以在 Alist 中添加存储驱动时选择
 
 | 仓库 | 地址 |
 |------|------|
-| GitHub Container Registry | `ghcr.io/workerspages/alist-rclone:latest` |
-| Docker Hub | `workerspages/alist-rclone:latest` |
+| GitHub Container Registry | `ghcr.io/workerspages/alist-rclone:main` |
+| Docker Hub | `workerspages/alist-rclone:main` |
 
 ---
 
