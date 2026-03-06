@@ -50,12 +50,15 @@ services:
       - "5000:80"
     volumes:
       - ./data:/data
-      - ./host:/opt/host  # 映射宿主机目录至容器内，用于本地与网盘间的文件传输
+      - ./host:/opt/host # 映射宿主机目录至容器内，用于本地与网盘间的文件传输
     environment:
       - TZ=Asia/Shanghai
+      # Web 控制台登录凭据
       - WEB_USERNAME=admin
-      - WEB_PASSWORD=your_password
-      - ALIST_ADMIN_PASSWORD=your_alist_password
+      - WEB_PASSWORD=your_password_here
+      # Alist 管理员凭据
+      - ALIST_ADMIN_USERNAME=admin
+      - ALIST_ADMIN_PASSWORD=your_alist_password_here
 ```
 
 启动：
