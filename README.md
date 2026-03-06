@@ -8,10 +8,10 @@
 
 - 🗂️ **Alist 文件管理** — 支持多种云存储的在线文件管理
 - ☁️ **Rclone 云同步** — 强大的云存储挂载和同步工具（wiserain mod 版本）
-- 🎛️ **统一 Web 控制台** — 在浏览器中管理所有配置
+- 🎛️ **统一 Web 控制台** — 在浏览器中管理所有配置和操作
+- 🔄 **高级文件传输** — 支持在不同云盘间直接互拷，支持并发、过滤等高级传输参数
 - 🔐 **安全登录** — 用户名密码认证保护
-- 📊 **状态监控** — 实时查看服务运行状态
-- 📝 **日志查看** — 在线查看所有服务日志
+- 📊 **状态监控与日志** — 实时查看服务运行状态及各组件日志
 - 🏗️ **多架构支持** — 同时支持 `amd64` 和 `arm64`
 
 ---
@@ -88,7 +88,7 @@ docker compose up -d
 
 部署完成后：
 - **Alist 文件管理**：访问 `http://你的IP:端口/` 即可打开 Alist
-- **Web 管理控制台**：访问 `http://你的IP:端口/console/` 管理 Rclone 配置、查看日志等
+- **Web 管理控制台**：访问 `http://你的IP:端口/console/` 管理 Rclone 配置、文件传输、查看日志等
 
 ### 路由说明
 
@@ -96,20 +96,15 @@ docker compose up -d
 |------|------|------|
 | `/` | Alist 文件管理 | Alist 原生界面（根路径直接访问） |
 | `/console/` | Web 管理控制台 | 统一管理界面，需登录 |
-| `/rclone/` | Rclone Web GUI | Rclone 原生管理界面 |
 | `/console-api/` | 后端 API | 控制台后端接口 |
 
 ### Web 控制台功能
 
 1. **仪表板** — 查看 Alist 和 Rclone 运行状态、运行时间、远程存储数量
-2. **Rclone 配置** — 添加/删除远程存储，支持常见云存储类型：
-   - Amazon S3 / 兼容存储（阿里云 OSS、腾讯云 COS、Cloudflare R2 等）
-   - Google Drive、OneDrive、Dropbox
-   - WebDAV、SFTP、FTP
-   - Backblaze B2、Azure Blob、Mega、pCloud 等
-3. **Alist 管理** — 内嵌 Alist 管理界面
-4. **Rclone GUI** — 内嵌 Rclone 原生 Web GUI
-5. **日志查看器** — 在线查看 Alist、Rclone、Nginx、API 四个服务的日志
+2. **Rclone 配置** — 添加/测试/删除远程存储，包括强大的实时 **连通性探测功能**
+3. **文件传输** — 支持在多个 Rclone 配置间进行文件复制、移动和同步操作。包含高级参数（如 `--transfers`并发数，`--exclude`排除等）
+4. **Alist 文件管理** — 内嵌 Alist 管理主打界面，一站式管理所有文件
+5. **日志** — 在线查看 Alist、Rclone、Nginx、API 的运行日志
 
 ---
 
