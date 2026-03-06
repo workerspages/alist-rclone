@@ -161,7 +161,7 @@ const App = {
         if (page === 'rclone-config') this.loadRemotes();
         if (page === 'transfer') this.loadTransferPage();
         if (page === 'alist') this.loadAlistFrame();
-        if (page === 'rclone-gui') this.loadRcloneFrame();
+
         if (page === 'logs') this.loadLogs(this.currentLogService);
         // Close mobile sidebar
         document.querySelector('.sidebar').classList.remove('open');
@@ -548,12 +548,7 @@ const App = {
         }
     },
 
-    loadRcloneFrame() {
-        const frame = document.getElementById('rclone-frame');
-        if (!frame.src || frame.src === window.location.href) {
-            frame.src = '/rclone/';
-        }
-    },
+
 
     // ========================
     // Logs
