@@ -98,12 +98,10 @@
                 </li>
                 <li class="nav-item" data-page="transfer">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="17 1 21 5 17 9" />
-                        <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-                        <polyline points="7 23 3 19 7 15" />
-                        <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
                     </svg>
-                    <span>文件传输</span>
+                    <span>定时任务</span>
                 </li>
                 <li class="nav-item" data-page="alist">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -302,32 +300,51 @@
                     </div>
                 </div>
 
-                <!-- Transfer Page -->
+                <!-- Transfer / Scheduled Tasks Page -->
                 <div id="page-transfer" class="page">
-                    <div class="transfer-layout">
-                        <!-- Transfer Form -->
-                        <div class="panel">
-                            <div class="panel-header">
-                                <h3>传输设置</h3>
+                    <div class="page-actions">
+                        <button class="btn btn-primary" onclick="App.showTaskModal()">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19" />
+                                <line x1="5" y1="12" x2="19" y2="12" />
+                            </svg>
+                            <span>添加任务</span>
+                        </button>
+                        <button class="btn btn-secondary" onclick="App.loadTasksPage()">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="23 4 23 10 17 10" />
+                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                            </svg>
+                            <span>刷新</span>
+                        </button>
+                    </div>
+                    <div id="tasks-list" class="tasks-grid">
+                        <div class="loading-state"><div class="spinner"></div><p>加载中...</p></div>
+                    </div>
+
+                    <!-- Task Modal -->
+                    <div id="task-modal" class="modal-overlay">
+                        <div class="modal" style="max-width:620px">
+                            <div class="modal-header">
+                                <h3 id="task-modal-title">添加任务</h3>
+                                <button class="btn-icon" onclick="App.closeTaskModal()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg></button>
                             </div>
-                            <div class="panel-body">
+                            <div class="modal-body">
+                                <div class="form-group">
+                                    <label for="task-name">任务名称</label>
+                                    <input type="text" id="task-name" placeholder="例如: 每日备份照片" required>
+                                </div>
                                 <div class="transfer-form">
                                     <div class="transfer-endpoint">
                                         <label>源</label>
                                         <div class="endpoint-row">
-                                            <select id="transfer-src-remote"
-                                                onchange="App.onTransferRemoteChange('src')">
-                                                <option value="">-- 选择远程存储 --</option>
-                                            </select>
-                                            <input type="text" id="transfer-src-path" placeholder="路径，例如: /photos"
-                                                value="/">
-                                            <button class="btn btn-secondary btn-sm" onclick="App.browseRemote('src')"
-                                                title="浏览">📂</button>
+                                            <select id="task-src-remote"><option value="">-- 选择远程存储 --</option></select>
+                                            <input type="text" id="task-src-path" placeholder="/" value="/">
+                                            <button class="btn btn-secondary btn-sm" onclick="App.browseRemote('task-src')" title="浏览">📂</button>
                                         </div>
                                     </div>
                                     <div class="transfer-arrow">
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                             <line x1="12" y1="5" x2="12" y2="19" />
                                             <polyline points="19 12 12 19 5 12" />
                                         </svg>
@@ -335,144 +352,113 @@
                                     <div class="transfer-endpoint">
                                         <label>目标</label>
                                         <div class="endpoint-row">
-                                            <select id="transfer-dst-remote"
-                                                onchange="App.onTransferRemoteChange('dst')">
-                                                <option value="">-- 选择远程存储 --</option>
-                                            </select>
-                                            <input type="text" id="transfer-dst-path" placeholder="路径，例如: /backup"
-                                                value="/">
-                                            <button class="btn btn-secondary btn-sm" onclick="App.browseRemote('dst')"
-                                                title="浏览">📂</button>
+                                            <select id="task-dst-remote"><option value="">-- 选择远程存储 --</option></select>
+                                            <input type="text" id="task-dst-path" placeholder="/" value="/">
+                                            <button class="btn btn-secondary btn-sm" onclick="App.browseRemote('task-dst')" title="浏览">📂</button>
                                         </div>
-                                    </div>
-                                    <div class="transfer-actions">
-                                        <button class="btn btn-primary" onclick="App.startTransfer('copy')">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2">
-                                                <rect x="9" y="9" width="13" height="13" rx="2" />
-                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                                            </svg>
-                                            <span>复制</span>
-                                        </button>
-                                        <button class="btn btn-secondary" onclick="App.startTransfer('sync')">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2">
-                                                <polyline points="23 4 23 10 17 10" />
-                                                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                                            </svg>
-                                            <span>同步</span>
-                                        </button>
-                                        <button class="btn btn-secondary" onclick="App.startTransfer('move')">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                                stroke="currentColor" stroke-width="2">
-                                                <polyline points="17 1 21 5 17 9" />
-                                                <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-                                            </svg>
-                                            <span>移动</span>
-                                        </button>
-                                    </div>
-                                    <!-- Advanced Options -->
-                                    <details class="advanced-options" id="transfer-advanced">
-                                        <summary>⚙️ 高级选项</summary>
-                                        <div class="advanced-grid">
-                                            <div class="adv-group">
-                                                <label>并发传输数 (--transfers)</label>
-                                                <input type="number" id="opt-transfers" placeholder="4" min="1">
-                                            </div>
-                                            <div class="adv-group">
-                                                <label>检查线程数 (--checkers)</label>
-                                                <input type="number" id="opt-checkers" placeholder="8" min="1">
-                                            </div>
-                                            <div class="adv-group">
-                                                <label>缓冲区大小 (--buffer-size)</label>
-                                                <input type="text" id="opt-buffer-size" placeholder="16M">
-                                            </div>
-                                            <div class="adv-group">
-                                                <label>最大文件大小 (--max-size)</label>
-                                                <input type="text" id="opt-max-size" placeholder="例如: 5G">
-                                            </div>
-                                            <div class="adv-group">
-                                                <label>最小文件大小 (--min-size)</label>
-                                                <input type="text" id="opt-min-size" placeholder="例如: 1K">
-                                            </div>
-                                            <div class="adv-group">
-                                                <label>超时时间 (--timeout)</label>
-                                                <input type="text" id="opt-timeout" placeholder="5m0s">
-                                            </div>
-                                            <div class="adv-group">
-                                                <label>重试次数 (--retries)</label>
-                                                <input type="number" id="opt-retries" placeholder="3" min="0">
-                                            </div>
-                                            <div class="adv-group">
-                                                <label>低级重试 (--low-level-retries)</label>
-                                                <input type="number" id="opt-low-level-retries" placeholder="10"
-                                                    min="0">
-                                            </div>
-                                        </div>
-                                        <div class="adv-group" style="margin-top:12px">
-                                            <label>包含规则 (--include)</label>
-                                            <input type="text" id="opt-include" placeholder="例如: /{手机备份}/**">
-                                        </div>
-                                        <div class="adv-group" style="margin-top:8px">
-                                            <label>排除规则 (--exclude)</label>
-                                            <input type="text" id="opt-exclude" placeholder="例如: *.tmp">
-                                        </div>
-                                        <div class="adv-checkboxes" style="margin-top:12px">
-                                            <label class="adv-checkbox"><input type="checkbox"
-                                                    id="opt-ignore-errors"><span>忽略错误 (--ignore-errors)</span></label>
-                                            <label class="adv-checkbox"><input type="checkbox"
-                                                    id="opt-check-first"><span>先检查再传输 (--check-first)</span></label>
-                                            <label class="adv-checkbox"><input type="checkbox"
-                                                    id="opt-size-only"><span>仅比较大小 (--size-only)</span></label>
-                                            <label class="adv-checkbox"><input type="checkbox"
-                                                    id="opt-no-traverse"><span>不遍历目标 (--no-traverse)</span></label>
-                                            <label class="adv-checkbox"><input type="checkbox"
-                                                    id="opt-verbose"><span>详细输出 (-v)</span></label>
-                                        </div>
-                                        <div class="adv-group" style="margin-top:12px">
-                                            <label>额外标志 (原始命令行参数)</label>
-                                            <textarea id="opt-extra-flags"
-                                                placeholder="每行一个参数，例如:&#10;--bwlimit 10M&#10;--log-level DEBUG"
-                                                rows="3"></textarea>
-                                        </div>
-                                    </details>
-                                    <div class="transfer-note">
-                                        <small>💡 <b>复制</b>: 将源文件复制到目标 | <b>同步</b>: 使目标与源完全一致（会删除目标多余文件）| <b>移动</b>:
-                                            移动后删除源文件</small>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-                        <!-- Active Jobs -->
-                        <div class="panel">
-                            <div class="panel-header">
-                                <h3>传输任务</h3>
-                                <button class="btn btn-secondary btn-sm" onclick="App.refreshJobs()">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                        stroke-width="2">
-                                        <polyline points="23 4 23 10 17 10" />
-                                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                                    </svg>
-                                    <span>刷新</span>
-                                </button>
-                            </div>
-                            <div class="panel-body" id="transfer-stats">
-                                <div class="empty-state">
-                                    <p>暂无传输任务</p>
+                                <div class="form-row" style="display:flex;gap:12px;margin-top:4px">
+                                    <div class="form-group" style="flex:1">
+                                        <label for="task-mode">传输模式</label>
+                                        <select id="task-mode">
+                                            <option value="copy">复制 (Copy)</option>
+                                            <option value="sync">同步 (Sync)</option>
+                                            <option value="move">移动 (Move)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" style="flex:1">
+                                        <label for="task-cron-preset">定时周期</label>
+                                        <select id="task-cron-preset" onchange="App.onCronPresetChange()">
+                                            <option value="">自定义</option>
+                                            <option value="0 * * * *">每小时</option>
+                                            <option value="0 */6 * * *">每6小时</option>
+                                            <option value="0 */12 * * *">每12小时</option>
+                                            <option value="0 2 * * *">每天凌晨2点</option>
+                                            <option value="0 3 * * 0">每周日凌晨3点</option>
+                                            <option value="0 3 1 * *">每月1日凌晨3点</option>
+                                        </select>
+                                    </div>
                                 </div>
+                                <div class="form-group">
+                                    <label for="task-cron">Cron 表达式 <small style="color:var(--text-muted);text-transform:none;letter-spacing:0">(留空则仅手动执行)</small></label>
+                                    <input type="text" id="task-cron" placeholder="例如: 0 2 * * *  (每天凌晨2点)">
+                                    <small class="cron-hint" style="color:var(--text-muted);font-size:0.73rem;margin-top:4px;display:block">格式: 分 时 日 月 星期 | 示例: <code>*/30 * * * *</code> = 每30分钟</small>
+                                </div>
+                                <!-- Advanced Options in Task Modal -->
+                                <details class="advanced-options" id="task-advanced">
+                                    <summary>⚙️ 高级选项</summary>
+                                    <div class="advanced-grid">
+                                        <div class="adv-group">
+                                            <label>并发传输数</label>
+                                            <input type="number" id="task-opt-transfers" placeholder="4" min="1">
+                                        </div>
+                                        <div class="adv-group">
+                                            <label>检查线程数</label>
+                                            <input type="number" id="task-opt-checkers" placeholder="8" min="1">
+                                        </div>
+                                        <div class="adv-group">
+                                            <label>缓冲区大小</label>
+                                            <input type="text" id="task-opt-buffer-size" placeholder="16M">
+                                        </div>
+                                        <div class="adv-group">
+                                            <label>最大文件大小</label>
+                                            <input type="text" id="task-opt-max-size" placeholder="例如: 5G">
+                                        </div>
+                                        <div class="adv-group">
+                                            <label>最小文件大小</label>
+                                            <input type="text" id="task-opt-min-size" placeholder="例如: 1K">
+                                        </div>
+                                        <div class="adv-group">
+                                            <label>超时时间</label>
+                                            <input type="text" id="task-opt-timeout" placeholder="5m0s">
+                                        </div>
+                                    </div>
+                                    <div class="adv-group" style="margin-top:12px">
+                                        <label>包含规则 (--include)</label>
+                                        <input type="text" id="task-opt-include" placeholder="例如: /{手机备份}/**">
+                                    </div>
+                                    <div class="adv-group" style="margin-top:8px">
+                                        <label>排除规则 (--exclude)</label>
+                                        <input type="text" id="task-opt-exclude" placeholder="例如: *.tmp">
+                                    </div>
+                                    <div class="adv-checkboxes" style="margin-top:12px">
+                                        <label class="adv-checkbox"><input type="checkbox" id="task-opt-ignore-errors"><span>忽略错误</span></label>
+                                        <label class="adv-checkbox"><input type="checkbox" id="task-opt-size-only"><span>仅比较大小</span></label>
+                                        <label class="adv-checkbox"><input type="checkbox" id="task-opt-check-first"><span>先检查再传输</span></label>
+                                    </div>
+                                </details>
+                            </div>
+                            <div class="modal-footer">
+                                <input type="hidden" id="task-edit-id" value="">
+                                <button class="btn btn-secondary" onclick="App.closeTaskModal()">取消</button>
+                                <button class="btn btn-primary" onclick="App.saveTask()">保存</button>
                             </div>
                         </div>
                     </div>
+
+                    <!-- Task History Modal -->
+                    <div id="history-modal" class="modal-overlay">
+                        <div class="modal" style="max-width:560px">
+                            <div class="modal-header">
+                                <h3 id="history-modal-title">执行历史</h3>
+                                <button class="btn-icon" onclick="App.closeHistoryModal()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg></button>
+                            </div>
+                            <div class="modal-body">
+                                <div id="history-list" class="history-list"></div>
+                            </div>
+                            <div class="modal-footer">
+                                <button class="btn btn-secondary" onclick="App.closeHistoryModal()">关闭</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Browse Modal -->
                     <div id="browse-modal" class="modal-overlay">
                         <div class="modal">
                             <div class="modal-header">
                                 <h3 id="browse-modal-title">浏览文件</h3>
-                                <button class="btn-icon" onclick="App.closeBrowseModal()"><svg width="20" height="20"
-                                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <line x1="18" y1="6" x2="6" y2="18" />
-                                        <line x1="6" y1="6" x2="18" y2="18" />
-                                    </svg></button>
+                                <button class="btn-icon" onclick="App.closeBrowseModal()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg></button>
                             </div>
                             <div class="modal-body">
                                 <div class="browse-path-bar">
@@ -480,10 +466,7 @@
                                     <span id="browse-current-path">/</span>
                                 </div>
                                 <div id="browse-file-list" class="file-list">
-                                    <div class="loading-state">
-                                        <div class="spinner"></div>
-                                        <p>加载中...</p>
-                                    </div>
+                                    <div class="loading-state"><div class="spinner"></div><p>加载中...</p></div>
                                 </div>
                             </div>
                             <div class="modal-footer">

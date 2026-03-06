@@ -150,7 +150,7 @@ const App = {
         const titles = {
             dashboard: '仪表板',
             'rclone-config': 'Rclone 配置管理',
-            transfer: '文件传输',
+            transfer: '定时任务',
             alist: 'Alist 文件管理',
             'rclone-gui': 'Rclone Web GUI',
             logs: '日志查看器',
@@ -159,7 +159,7 @@ const App = {
         // Load page data
         if (page === 'dashboard') this.loadDashboard();
         if (page === 'rclone-config') this.loadRemotes();
-        if (page === 'transfer') this.loadTransferPage();
+        if (page === 'transfer') this.loadTasksPage();
         if (page === 'alist') this.loadAlistFrame();
 
         if (page === 'logs') this.loadLogs(this.currentLogService);
@@ -591,35 +591,294 @@ const App = {
     },
 
     // ========================
-    // File Transfer
+    // Scheduled Tasks
     // ========================
     browseTarget: null,
     browsePath: '/',
     browseRemoteName: '',
-    jobPollInterval: null,
+    taskRemotesCache: null,
 
-    async loadTransferPage() {
+    async loadTasksPage() {
+        const container = document.getElementById('tasks-list');
+        container.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>加载中...</p></div>';
         try {
-            const data = await this.api('GET', '/console-api/rclone/remotes');
-            const remotes = data.remotes || [];
-            const options = '<option value="">-- 选择远程存储 --</option>' +
-                remotes.map(r => `<option value="${this.escapeHtml(r.name)}">${this.escapeHtml(r.name)} (${this.escapeHtml(r.type || '')})</option>`).join('');
-            document.getElementById('transfer-src-remote').innerHTML = options;
-            document.getElementById('transfer-dst-remote').innerHTML = options;
+            const data = await this.api('GET', '/console-api/tasks');
+            const tasks = data.tasks || [];
+            if (tasks.length === 0) {
+                container.innerHTML = `<div class="empty-state">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <p>暂无定时任务</p>
+                    <button class="btn btn-primary" onclick="App.showTaskModal()">创建第一个任务</button>
+                </div>`;
+                return;
+            }
+            container.innerHTML = tasks.map(t => this.renderTaskCard(t)).join('');
         } catch (err) {
-            this.toast('加载远程存储列表失败', 'error');
+            container.innerHTML = `<div class="empty-state"><p>加载失败: ${this.escapeHtml(err.message)}</p></div>`;
         }
-        this.refreshJobs();
     },
 
-    onTransferRemoteChange(side) { },
+    renderTaskCard(t) {
+        const modeNames = { copy: '复制', sync: '同步', move: '移动' };
+        const modeName = modeNames[t.mode] || t.mode;
+        const statusIcon = t.lastStatus === 'success' ? '✅' : t.lastStatus === 'error' ? '❌' : '⏳';
+        const lastRunText = t.lastRun ? this.formatTime(t.lastRun) : '从未执行';
+        const cronText = t.cron || '仅手动';
+        const enabledClass = t.enabled ? 'enabled' : 'disabled';
+        return `<div class="task-card ${enabledClass}">
+            <div class="task-card-header">
+                <div class="task-card-title">
+                    <h4>${this.escapeHtml(t.name)}</h4>
+                    <span class="task-mode-badge mode-${t.mode}">${modeName}</span>
+                </div>
+                <div class="task-card-toggle">
+                    <label class="toggle-switch" title="${t.enabled ? '已启用' : '已禁用'}">
+                        <input type="checkbox" ${t.enabled ? 'checked' : ''} onchange="App.toggleTask('${t.id}')">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="task-card-body">
+                <div class="task-route">
+                    <span class="task-endpoint"><b>${this.escapeHtml(t.srcRemote)}</b>:${this.escapeHtml(t.srcPath || '/')}</span>
+                    <span class="task-arrow">→</span>
+                    <span class="task-endpoint"><b>${this.escapeHtml(t.dstRemote)}</b>:${this.escapeHtml(t.dstPath || '/')}</span>
+                </div>
+                <div class="task-meta">
+                    <span class="task-cron" title="Cron 表达式">⏰ ${this.escapeHtml(cronText)}</span>
+                    <span class="task-last-run">${statusIcon} ${lastRunText}</span>
+                </div>
+            </div>
+            <div class="task-card-actions">
+                <button class="btn btn-primary btn-sm" onclick="App.runTask('${t.id}')" title="立即执行">▶ 执行</button>
+                <button class="btn btn-secondary btn-sm" onclick="App.showTaskModal('${t.id}')" title="编辑">✏️ 编辑</button>
+                <button class="btn btn-secondary btn-sm" onclick="App.viewTaskHistory('${t.id}')" title="历史">
+                    📋 历史${t.historyCount > 0 ? ' (' + t.historyCount + ')' : ''}
+                </button>
+                <button class="btn btn-danger btn-sm" onclick="App.deleteTask('${t.id}')" title="删除">🗑️</button>
+            </div>
+        </div>`;
+    },
 
+    formatTime(isoStr) {
+        try {
+            const d = new Date(isoStr);
+            return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+        } catch { return isoStr; }
+    },
+
+    async loadTaskRemotes() {
+        if (this.taskRemotesCache) return this.taskRemotesCache;
+        try {
+            const data = await this.api('GET', '/console-api/rclone/remotes');
+            this.taskRemotesCache = data.remotes || [];
+            return this.taskRemotesCache;
+        } catch { return []; }
+    },
+
+    async showTaskModal(editId) {
+        const remotes = await this.loadTaskRemotes();
+        const options = '<option value="">-- 选择远程存储 --</option>' +
+            remotes.map(r => `<option value="${this.escapeHtml(r.name)}">${this.escapeHtml(r.name)} (${this.escapeHtml(r.type || '')})</option>`).join('');
+        document.getElementById('task-src-remote').innerHTML = options;
+        document.getElementById('task-dst-remote').innerHTML = options;
+
+        // Reset form
+        document.getElementById('task-name').value = '';
+        document.getElementById('task-src-path').value = '/';
+        document.getElementById('task-dst-path').value = '/';
+        document.getElementById('task-mode').value = 'copy';
+        document.getElementById('task-cron').value = '';
+        document.getElementById('task-cron-preset').value = '';
+        document.getElementById('task-edit-id').value = '';
+        // Reset advanced
+        ['task-opt-transfers', 'task-opt-checkers', 'task-opt-buffer-size', 'task-opt-max-size', 'task-opt-min-size', 'task-opt-timeout'].forEach(id => {
+            const el = document.getElementById(id); if (el) el.value = '';
+        });
+        ['task-opt-include', 'task-opt-exclude'].forEach(id => {
+            const el = document.getElementById(id); if (el) el.value = '';
+        });
+        ['task-opt-ignore-errors', 'task-opt-size-only', 'task-opt-check-first'].forEach(id => {
+            const el = document.getElementById(id); if (el) el.checked = false;
+        });
+
+        if (editId) {
+            document.getElementById('task-modal-title').textContent = '编辑任务';
+            document.getElementById('task-edit-id').value = editId;
+            try {
+                const data = await this.api('GET', '/console-api/tasks');
+                const task = (data.tasks || []).find(t => t.id === editId);
+                if (task) {
+                    document.getElementById('task-name').value = task.name || '';
+                    document.getElementById('task-src-remote').value = task.srcRemote || '';
+                    document.getElementById('task-src-path').value = task.srcPath || '/';
+                    document.getElementById('task-dst-remote').value = task.dstRemote || '';
+                    document.getElementById('task-dst-path').value = task.dstPath || '/';
+                    document.getElementById('task-mode').value = task.mode || 'copy';
+                    document.getElementById('task-cron').value = task.cron || '';
+                    // Set preset if matches
+                    const presetSelect = document.getElementById('task-cron-preset');
+                    const presetOpts = Array.from(presetSelect.options).map(o => o.value);
+                    presetSelect.value = presetOpts.includes(task.cron) ? task.cron : '';
+                    // Advanced options
+                    const adv = task.advancedOptions || {};
+                    const cfg = adv._config || {};
+                    const flt = adv._filter || {};
+                    if (cfg.Transfers) document.getElementById('task-opt-transfers').value = cfg.Transfers;
+                    if (cfg.Checkers) document.getElementById('task-opt-checkers').value = cfg.Checkers;
+                    if (cfg.BufferSize) document.getElementById('task-opt-buffer-size').value = cfg.BufferSize;
+                    if (cfg.Timeout) document.getElementById('task-opt-timeout').value = cfg.Timeout;
+                    if (flt.MaxSize) document.getElementById('task-opt-max-size').value = flt.MaxSize;
+                    if (flt.MinSize) document.getElementById('task-opt-min-size').value = flt.MinSize;
+                    if (flt.IncludeRule?.[0]) document.getElementById('task-opt-include').value = flt.IncludeRule[0];
+                    if (flt.ExcludeRule?.[0]) document.getElementById('task-opt-exclude').value = flt.ExcludeRule[0];
+                    if (cfg.IgnoreErrors) document.getElementById('task-opt-ignore-errors').checked = true;
+                    if (cfg.SizeOnly) document.getElementById('task-opt-size-only').checked = true;
+                    if (cfg.CheckFirst) document.getElementById('task-opt-check-first').checked = true;
+                }
+            } catch (err) {
+                this.toast('加载任务详情失败', 'error');
+            }
+        } else {
+            document.getElementById('task-modal-title').textContent = '添加任务';
+        }
+        document.getElementById('task-modal').classList.add('active');
+    },
+
+    closeTaskModal() {
+        document.getElementById('task-modal').classList.remove('active');
+    },
+
+    onCronPresetChange() {
+        const val = document.getElementById('task-cron-preset').value;
+        if (val) document.getElementById('task-cron').value = val;
+    },
+
+    async saveTask() {
+        const name = document.getElementById('task-name').value.trim();
+        const srcRemote = document.getElementById('task-src-remote').value;
+        const srcPath = document.getElementById('task-src-path').value || '/';
+        const dstRemote = document.getElementById('task-dst-remote').value;
+        const dstPath = document.getElementById('task-dst-path').value || '/';
+        const mode = document.getElementById('task-mode').value;
+        const cronExpr = document.getElementById('task-cron').value.trim();
+        const editId = document.getElementById('task-edit-id').value;
+
+        if (!name) { this.toast('请输入任务名称', 'error'); return; }
+        if (!srcRemote || !dstRemote) { this.toast('请选择源和目标存储', 'error'); return; }
+
+        // Collect advanced options
+        const _config = {};
+        const _filter = {};
+        const getVal = (id) => document.getElementById(id)?.value?.trim() || '';
+        const getCheck = (id) => document.getElementById(id)?.checked || false;
+        if (getVal('task-opt-transfers')) _config.Transfers = parseInt(getVal('task-opt-transfers'));
+        if (getVal('task-opt-checkers')) _config.Checkers = parseInt(getVal('task-opt-checkers'));
+        if (getVal('task-opt-buffer-size')) _config.BufferSize = getVal('task-opt-buffer-size');
+        if (getVal('task-opt-timeout')) _config.Timeout = getVal('task-opt-timeout');
+        if (getCheck('task-opt-ignore-errors')) _config.IgnoreErrors = true;
+        if (getCheck('task-opt-check-first')) _config.CheckFirst = true;
+        if (getCheck('task-opt-size-only')) _config.SizeOnly = true;
+        if (getVal('task-opt-max-size')) _filter.MaxSize = getVal('task-opt-max-size');
+        if (getVal('task-opt-min-size')) _filter.MinSize = getVal('task-opt-min-size');
+        if (getVal('task-opt-include')) _filter.IncludeRule = [getVal('task-opt-include')];
+        if (getVal('task-opt-exclude')) _filter.ExcludeRule = [getVal('task-opt-exclude')];
+
+        const advancedOptions = {};
+        if (Object.keys(_config).length) advancedOptions._config = _config;
+        if (Object.keys(_filter).length) advancedOptions._filter = _filter;
+
+        const body = { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, advancedOptions };
+
+        try {
+            if (editId) {
+                await this.api('PUT', '/console-api/tasks/' + editId, body);
+                this.toast('任务已更新', 'success');
+            } else {
+                await this.api('POST', '/console-api/tasks', body);
+                this.toast('任务已创建', 'success');
+            }
+            this.closeTaskModal();
+            this.loadTasksPage();
+        } catch (err) {
+            this.toast('保存失败: ' + err.message, 'error');
+        }
+    },
+
+    async deleteTask(id) {
+        if (!confirm('确定删除此任务吗？')) return;
+        try {
+            await this.api('DELETE', '/console-api/tasks/' + id);
+            this.toast('任务已删除', 'success');
+            this.loadTasksPage();
+        } catch (err) {
+            this.toast('删除失败: ' + err.message, 'error');
+        }
+    },
+
+    async toggleTask(id) {
+        try {
+            const data = await this.api('POST', '/console-api/tasks/' + id + '/toggle');
+            this.toast(data.enabled ? '任务已启用' : '任务已禁用', 'success');
+            this.loadTasksPage();
+        } catch (err) {
+            this.toast('操作失败: ' + err.message, 'error');
+        }
+    },
+
+    async runTask(id) {
+        try {
+            this.toast('正在执行任务...', 'info');
+            const data = await this.api('POST', '/console-api/tasks/' + id + '/run');
+            if (data.record?.status === 'success') {
+                this.toast('任务已启动', 'success');
+            } else {
+                this.toast('任务执行失败: ' + (data.record?.message || '未知错误'), 'error');
+            }
+            this.loadTasksPage();
+        } catch (err) {
+            this.toast('执行失败: ' + err.message, 'error');
+        }
+    },
+
+    async viewTaskHistory(id) {
+        const list = document.getElementById('history-list');
+        list.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>加载中...</p></div>';
+        document.getElementById('history-modal').classList.add('active');
+        try {
+            const data = await this.api('GET', '/console-api/tasks/' + id + '/history');
+            const history = data.history || [];
+            if (history.length === 0) {
+                list.innerHTML = '<div class="empty-state"><p>暂无执行记录</p></div>';
+                return;
+            }
+            list.innerHTML = history.map(h => {
+                const statusCls = h.status === 'success' ? 'history-success' : 'history-error';
+                const statusText = h.status === 'success' ? '✅ 成功' : '❌ 失败';
+                return `<div class="history-item ${statusCls}">
+                    <span class="history-time">${this.formatTime(h.time)}</span>
+                    <span class="history-status">${statusText}</span>
+                    <span class="history-msg">${this.escapeHtml(h.message || '')}</span>
+                </div>`;
+            }).join('');
+        } catch (err) {
+            list.innerHTML = `<div class="empty-state"><p>加载失败: ${this.escapeHtml(err.message)}</p></div>`;
+        }
+    },
+
+    closeHistoryModal() {
+        document.getElementById('history-modal').classList.remove('active');
+    },
+
+    // ========================
+    // File Browser (shared)
+    // ========================
     async browseRemote(target) {
-        const remote = document.getElementById(`transfer-${target}-remote`).value;
+        const remote = document.getElementById(`${target}-remote`).value;
         if (!remote) { this.toast('请先选择远程存储', 'error'); return; }
         this.browseTarget = target;
         this.browseRemoteName = remote;
-        this.browsePath = document.getElementById(`transfer-${target}-path`).value || '/';
+        this.browsePath = document.getElementById(`${target}-path`).value || '/';
         document.getElementById('browse-modal-title').textContent = '浏览: ' + remote;
         document.getElementById('browse-modal').classList.add('active');
         this.loadBrowseDir();
@@ -669,7 +928,7 @@ const App = {
     },
 
     selectBrowsePath() {
-        document.getElementById(`transfer-${this.browseTarget}-path`).value = this.browsePath;
+        document.getElementById(`${this.browseTarget}-path`).value = this.browsePath;
         this.closeBrowseModal();
     },
 
@@ -683,136 +942,6 @@ const App = {
         const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-    },
-
-    async startTransfer(mode) {
-        const srcRemote = document.getElementById('transfer-src-remote').value;
-        const dstRemote = document.getElementById('transfer-dst-remote').value;
-        const srcPath = document.getElementById('transfer-src-path').value || '/';
-        const dstPath = document.getElementById('transfer-dst-path').value || '/';
-        if (!srcRemote || !dstRemote) {
-            this.toast('请选择源和目标远程存储', 'error'); return;
-        }
-        const srcFs = srcRemote + ':' + srcPath;
-        const dstFs = dstRemote + ':' + dstPath;
-        const modeNames = { copy: '复制', sync: '同步', move: '移动' };
-        if (mode === 'sync' && !confirm('同步会删除目标中源不存在的文件，确定继续？')) return;
-        if (mode === 'move' && !confirm('移动完成后源文件将被删除，确定继续？')) return;
-
-        // Collect advanced options
-        const _config = {};
-        const _filter = {};
-        const getVal = (id) => document.getElementById(id)?.value?.trim() || '';
-        const getCheck = (id) => document.getElementById(id)?.checked || false;
-
-        if (getVal('opt-transfers')) _config.Transfers = parseInt(getVal('opt-transfers'));
-        if (getVal('opt-checkers')) _config.Checkers = parseInt(getVal('opt-checkers'));
-        if (getVal('opt-buffer-size')) _config.BufferSize = getVal('opt-buffer-size');
-        if (getVal('opt-timeout')) _config.Timeout = getVal('opt-timeout');
-        if (getVal('opt-retries')) _config.LowLevelRetries = parseInt(getVal('opt-retries'));
-        if (getVal('opt-low-level-retries')) _config.LowLevelRetries = parseInt(getVal('opt-low-level-retries'));
-        if (getCheck('opt-ignore-errors')) _config.IgnoreErrors = true;
-        if (getCheck('opt-check-first')) _config.CheckFirst = true;
-        if (getCheck('opt-size-only')) _config.SizeOnly = true;
-        if (getCheck('opt-no-traverse')) _config.NoTraverse = true;
-        if (getCheck('opt-verbose')) _config.LogLevel = 'DEBUG';
-
-        if (getVal('opt-max-size')) _filter.MaxSize = getVal('opt-max-size');
-        if (getVal('opt-min-size')) _filter.MinSize = getVal('opt-min-size');
-        if (getVal('opt-include')) _filter.IncludeRule = [getVal('opt-include')];
-        if (getVal('opt-exclude')) _filter.ExcludeRule = [getVal('opt-exclude')];
-
-        // Parse extra flags into _config
-        const extra = getVal('opt-extra-flags');
-        if (extra) {
-            extra.split('\n').forEach(line => {
-                line = line.trim();
-                if (!line || !line.startsWith('-')) return;
-                const match = line.match(/^--?([\w-]+)\s*(.*)/);
-                if (match) {
-                    const key = match[1].replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-                    const val = match[2].trim();
-                    _config[key] = val || true;
-                }
-            });
-        }
-
-        const body = { srcFs, dstFs, _async: true };
-        if (Object.keys(_config).length) body._config = _config;
-        if (Object.keys(_filter).length) body._filter = _filter;
-
-        try {
-            this.toast(`正在启动${modeNames[mode]}任务...`, 'info');
-            await this.api('POST', `/console-api/rclone/${mode}`, body);
-            this.toast(`${modeNames[mode]}任务已启动: ${srcFs} → ${dstFs}`, 'success');
-            this.startJobPolling();
-        } catch (err) {
-            this.toast('任务启动失败: ' + err.message, 'error');
-        }
-    },
-
-    startJobPolling() {
-        this.refreshJobs();
-        if (this.jobPollInterval) clearInterval(this.jobPollInterval);
-        this.jobPollInterval = setInterval(() => {
-            if (this.currentPage === 'transfer') this.refreshJobs();
-            else { clearInterval(this.jobPollInterval); this.jobPollInterval = null; }
-        }, 3000);
-    },
-
-    async refreshJobs() {
-        const container = document.getElementById('transfer-stats');
-        try {
-            const stats = await this.api('GET', '/console-api/rclone/stats');
-            const jobs = await this.api('GET', '/console-api/rclone/jobs');
-            const jobIds = jobs.jobids || [];
-            if (stats.transferring || stats.bytes > 0 || jobIds.length > 0) {
-                let html = '<div class="stats-summary">';
-                html += `<div class="stat-row"><span>已传输</span><span>${this.formatSize(stats.bytes || 0)}</span></div>`;
-                html += `<div class="stat-row"><span>速度</span><span>${this.formatSize(stats.speed || 0)}/s</span></div>`;
-                html += `<div class="stat-row"><span>文件数</span><span>${stats.transfers || 0} / ${(stats.totalTransfers || 0)}</span></div>`;
-                html += `<div class="stat-row"><span>检查数</span><span>${stats.checks || 0} / ${(stats.totalChecks || 0)}</span></div>`;
-                if (stats.errors > 0) html += `<div class="stat-row error"><span>错误</span><span>${stats.errors}</span></div>`;
-                html += '</div>';
-                if (stats.transferring && stats.transferring.length > 0) {
-                    html += '<div class="active-transfers">';
-                    stats.transferring.forEach(t => {
-                        const pct = t.percentage || 0;
-                        html += `<div class="transfer-item">
-                            <div class="transfer-item-name" title="${this.escapeHtml(t.name)}">${this.escapeHtml(t.name)}</div>
-                            <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-                            <div class="transfer-item-info">${pct}% · ${this.formatSize(t.speed || 0)}/s · ${this.formatSize(t.bytes || 0)}/${this.formatSize(t.size || 0)}</div>
-                        </div>`;
-                    });
-                    html += '</div>';
-                }
-                if (jobIds.length > 0) {
-                    html += `<div class="job-actions"><button class="btn btn-secondary btn-sm" onclick="App.stopAllJobs()">⏹ 停止所有任务</button></div>`;
-                } else if (!stats.transferring || stats.transferring.length === 0) {
-                    html += '<div class="transfer-complete"><p>✅ 所有任务已完成</p></div>';
-                    if (this.jobPollInterval) { clearInterval(this.jobPollInterval); this.jobPollInterval = null; }
-                }
-                container.innerHTML = html;
-            } else {
-                container.innerHTML = '<div class="empty-state"><p>暂无传输任务</p></div>';
-                if (this.jobPollInterval) { clearInterval(this.jobPollInterval); this.jobPollInterval = null; }
-            }
-        } catch {
-            container.innerHTML = '<div class="empty-state"><p>获取状态失败</p></div>';
-        }
-    },
-
-    async stopAllJobs() {
-        try {
-            const jobs = await this.api('GET', '/console-api/rclone/jobs');
-            for (const id of (jobs.jobids || [])) {
-                await this.api('POST', '/console-api/rclone/job/stop', { jobid: id });
-            }
-            this.toast('所有任务已停止', 'success');
-            setTimeout(() => this.refreshJobs(), 1000);
-        } catch (err) {
-            this.toast('停止失败: ' + err.message, 'error');
-        }
     },
 };
 

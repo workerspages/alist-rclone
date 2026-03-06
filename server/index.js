@@ -3,6 +3,8 @@ const jwt = require('jsonwebtoken');
 const { execSync, exec } = require('child_process');
 const fs = require('fs');
 const http = require('http');
+const cron = require('node-cron');
+const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 app.use(express.json());
@@ -370,8 +372,213 @@ app.post('/api/rclone/job/stop', authMiddleware, async (req, res) => {
 });
 
 // ========================
+// Scheduled Tasks
+// ========================
+const TASKS_FILE = process.env.TASKS_FILE || '/data/rclone/scheduled-tasks.json';
+const cronJobs = new Map(); // taskId -> cron.ScheduledTask
+
+function loadTasks() {
+  try {
+    if (fs.existsSync(TASKS_FILE)) {
+      return JSON.parse(fs.readFileSync(TASKS_FILE, 'utf-8'));
+    }
+  } catch (err) {
+    console.error('Failed to load tasks:', err.message);
+  }
+  return [];
+}
+
+function saveTasks(tasks) {
+  try {
+    const dir = require('path').dirname(TASKS_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(TASKS_FILE, JSON.stringify(tasks, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to save tasks:', err.message);
+  }
+}
+
+async function executeTask(task) {
+  const srcFs = task.srcRemote + ':' + (task.srcPath || '/');
+  const dstFs = task.dstRemote + ':' + (task.dstPath || '/');
+  const mode = task.mode || 'copy';
+  const modeMap = { copy: '/sync/copy', sync: '/sync/sync', move: '/sync/move' };
+  const endpoint = modeMap[mode] || '/sync/copy';
+
+  const params = { srcFs, dstFs, _async: true };
+  if (task.advancedOptions) {
+    if (task.advancedOptions._config && Object.keys(task.advancedOptions._config).length) {
+      params._config = task.advancedOptions._config;
+    }
+    if (task.advancedOptions._filter && Object.keys(task.advancedOptions._filter).length) {
+      params._filter = task.advancedOptions._filter;
+    }
+  }
+
+  const startTime = new Date().toISOString();
+  try {
+    const result = await rcloneRC(endpoint, params);
+    return { time: startTime, status: 'success', jobId: result.jobid || null, message: '任务已启动' };
+  } catch (err) {
+    return { time: startTime, status: 'error', message: err.message };
+  }
+}
+
+function scheduleTask(task) {
+  unscheduleTask(task.id);
+  if (!task.enabled || !task.cron) return;
+  if (!cron.validate(task.cron)) {
+    console.error(`Invalid cron expression for task ${task.id}: ${task.cron}`);
+    return;
+  }
+  const job = cron.schedule(task.cron, async () => {
+    console.log(`[Scheduler] Running task: ${task.name} (${task.id})`);
+    const tasks = loadTasks();
+    const t = tasks.find(x => x.id === task.id);
+    if (!t || !t.enabled) return;
+
+    const record = await executeTask(t);
+    t.lastRun = record.time;
+    t.lastStatus = record.status;
+    if (!t.history) t.history = [];
+    t.history.unshift(record);
+    if (t.history.length > 50) t.history = t.history.slice(0, 50);
+    saveTasks(tasks);
+  }, { scheduled: true, timezone: 'Asia/Shanghai' });
+  cronJobs.set(task.id, job);
+}
+
+function unscheduleTask(taskId) {
+  const existing = cronJobs.get(taskId);
+  if (existing) {
+    existing.stop();
+    cronJobs.delete(taskId);
+  }
+}
+
+function initScheduler() {
+  const tasks = loadTasks();
+  tasks.forEach(t => { if (t.enabled) scheduleTask(t); });
+  console.log(`[Scheduler] Initialized ${tasks.filter(t => t.enabled).length}/${tasks.length} tasks`);
+}
+
+// --- Task CRUD API ---
+app.get('/api/tasks', authMiddleware, (req, res) => {
+  const tasks = loadTasks();
+  // Return tasks without full history for list view
+  const list = tasks.map(t => ({
+    ...t,
+    history: undefined,
+    historyCount: (t.history || []).length,
+  }));
+  res.json({ tasks: list });
+});
+
+app.post('/api/tasks', authMiddleware, (req, res) => {
+  const { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, enabled, advancedOptions } = req.body;
+  if (!name || !srcRemote || !dstRemote) {
+    return res.status(400).json({ error: '任务名称、源存储和目标存储为必填项' });
+  }
+  if (cronExpr && !cron.validate(cronExpr)) {
+    return res.status(400).json({ error: 'Cron 表达式格式无效' });
+  }
+  const task = {
+    id: uuidv4(),
+    name,
+    srcRemote,
+    srcPath: srcPath || '/',
+    dstRemote,
+    dstPath: dstPath || '/',
+    mode: mode || 'copy',
+    cron: cronExpr || '',
+    enabled: enabled !== false,
+    advancedOptions: advancedOptions || {},
+    lastRun: null,
+    lastStatus: null,
+    history: [],
+    createdAt: new Date().toISOString(),
+  };
+  const tasks = loadTasks();
+  tasks.push(task);
+  saveTasks(tasks);
+  if (task.enabled && task.cron) scheduleTask(task);
+  res.json({ success: true, task: { ...task, history: undefined } });
+});
+
+app.put('/api/tasks/:id', authMiddleware, (req, res) => {
+  const tasks = loadTasks();
+  const idx = tasks.findIndex(t => t.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: '任务不存在' });
+
+  const { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, enabled, advancedOptions } = req.body;
+  if (cronExpr && !cron.validate(cronExpr)) {
+    return res.status(400).json({ error: 'Cron 表达式格式无效' });
+  }
+
+  const task = tasks[idx];
+  if (name !== undefined) task.name = name;
+  if (srcRemote !== undefined) task.srcRemote = srcRemote;
+  if (srcPath !== undefined) task.srcPath = srcPath;
+  if (dstRemote !== undefined) task.dstRemote = dstRemote;
+  if (dstPath !== undefined) task.dstPath = dstPath;
+  if (mode !== undefined) task.mode = mode;
+  if (cronExpr !== undefined) task.cron = cronExpr;
+  if (enabled !== undefined) task.enabled = enabled;
+  if (advancedOptions !== undefined) task.advancedOptions = advancedOptions;
+
+  saveTasks(tasks);
+  scheduleTask(task);
+  res.json({ success: true, task: { ...task, history: undefined } });
+});
+
+app.delete('/api/tasks/:id', authMiddleware, (req, res) => {
+  let tasks = loadTasks();
+  const idx = tasks.findIndex(t => t.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: '任务不存在' });
+  unscheduleTask(req.params.id);
+  tasks.splice(idx, 1);
+  saveTasks(tasks);
+  res.json({ success: true });
+});
+
+app.post('/api/tasks/:id/run', authMiddleware, async (req, res) => {
+  const tasks = loadTasks();
+  const task = tasks.find(t => t.id === req.params.id);
+  if (!task) return res.status(404).json({ error: '任务不存在' });
+
+  const record = await executeTask(task);
+  task.lastRun = record.time;
+  task.lastStatus = record.status;
+  if (!task.history) task.history = [];
+  task.history.unshift(record);
+  if (task.history.length > 50) task.history = task.history.slice(0, 50);
+  saveTasks(tasks);
+  res.json({ success: true, record });
+});
+
+app.post('/api/tasks/:id/toggle', authMiddleware, (req, res) => {
+  const tasks = loadTasks();
+  const task = tasks.find(t => t.id === req.params.id);
+  if (!task) return res.status(404).json({ error: '任务不存在' });
+
+  task.enabled = !task.enabled;
+  saveTasks(tasks);
+  if (task.enabled) scheduleTask(task);
+  else unscheduleTask(task.id);
+  res.json({ success: true, enabled: task.enabled });
+});
+
+app.get('/api/tasks/:id/history', authMiddleware, (req, res) => {
+  const tasks = loadTasks();
+  const task = tasks.find(t => t.id === req.params.id);
+  if (!task) return res.status(404).json({ error: '任务不存在' });
+  res.json({ history: task.history || [] });
+});
+
+// ========================
 // Start Server
 // ========================
 app.listen(PORT, '127.0.0.1', () => {
   console.log(`API server running on http://127.0.0.1:${PORT}`);
+  initScheduler();
 });
