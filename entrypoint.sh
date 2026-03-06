@@ -39,6 +39,25 @@ if [ ! -f /data/rclone/rclone.conf ]; then
     touch /data/rclone/rclone.conf
 fi
 
+# Auto-add local Alist WebDAV into Rclone config if it doesn't exist
+ALIST_REMOTE_NAME="alist"
+if ! grep -q "\[$ALIST_REMOTE_NAME\]" /data/rclone/rclone.conf; then
+    echo "[Init] Adding local Alist as WebDAV remote '$ALIST_REMOTE_NAME' to Rclone..."
+    ALIST_USER="${ALIST_ADMIN_USERNAME:-admin}"
+    ALIST_PASS="${ALIST_ADMIN_PASSWORD:-admin}"
+    # Obscure password for Rclone config
+    OBSCURED_PASS=$(rclone obscure "$ALIST_PASS")
+    cat >> /data/rclone/rclone.conf <<EOF
+
+[$ALIST_REMOTE_NAME]
+type = webdav
+url = http://127.0.0.1:5244/dav
+vendor = other
+user = $ALIST_USER
+pass = $OBSCURED_PASS
+EOF
+fi
+
 # ---- Set environment for API server ----
 export WEB_USERNAME="${WEB_USERNAME:-admin}"
 export WEB_PASSWORD="${WEB_PASSWORD:-admin}"
