@@ -228,46 +228,24 @@ app.post('/api/rclone/test', authMiddleware, async (req, res) => {
     const start = Date.now();
     const fsPath = remote + ':';
 
-    // First try fsinfo, which initializes the backend and checks basic config
-    await rcloneRC('/operations/fsinfo', { fs: fsPath });
+    // Rclone RC API often returns 200 OK and empty list for invalid webdav/http configs
+    // Therefore, using CLI commands directly is the most reliable way to catch connection errors.
+    const util = require('util');
+    const execPromise = util.promisify(exec);
 
-    // Try to get quota/space info - this is a strong indicator of successful auth for most remotes
-    let aboutOk = false;
     try {
-      await rcloneRC('/operations/about', { fs: fsPath });
-      aboutOk = true;
+      // Use lsf to list the first level of items. It will throw an error if connection fails.
+      const { stdout } = await execPromise(`rclone lsf "${fsPath}" --max-depth 1 --config=/data/rclone/rclone.conf`, { timeout: 15000 });
+      const elapsed = Date.now() - start;
+      const count = stdout.split('\n').filter(line => line.trim().length > 0).length;
+      res.json({ ok: true, message: `连接成功！响应耗时: ${elapsed}ms, 根目录可见 ${count} 个项目。` });
     } catch (err) {
-      // Some remotes (like local, http) don't support about, so we ignore errors here
+      // Extract the actual error message from stderr
+      const stderr = err.stderr || err.message || '';
+      // Clean up the error message, usually rclone outputs "Failed to XXX: error body"
+      const cleanError = stderr.split('\n').filter(l => l.includes('Failed to') || l.includes('error')).join('; ') || stderr;
+      throw new Error(cleanError || '未知连接错误');
     }
-
-    // Read the root directory to verify credentials and connectivity
-    const result = await rcloneRC('/operations/list', {
-      fs: fsPath,
-      remote: '',
-      opt: { showHash: false, noModTime: true }
-    });
-
-    const items = result.list || [];
-
-    if (items.length === 0) {
-      // If the directory is empty AND about is not supported, we must be extra careful.
-      // E.g. WebDAV connected to a wrong URL might return an HTML page yielding 0 items and no error.
-      try {
-        await rcloneRC('/operations/stat', { fs: fsPath, remote: '' });
-      } catch (err) {
-        throw new Error(`探测根目录节点失败，可能由于路径错误、密码错误或服务器不支持 (${err.message})`);
-      }
-
-      // Still 0 items and stat succeeded (but it's empty)? If it's a known risky protocol, warn the user.
-      // But we just assume it's OK for now if stat didn't throw.
-    }
-
-    const elapsed = Date.now() - start;
-    let msg = `连接成功！响应耗时: ${elapsed}ms`;
-    if (items.length > 0) msg += `, 根目录有 ${items.length} 个项目`;
-    else msg += ` (目录为空)`;
-
-    res.json({ ok: true, message: msg });
   } catch (err) {
     res.json({ ok: false, message: '连接失败: ' + err.message });
   }
