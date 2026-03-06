@@ -1,6 +1,6 @@
 services:
   alist-rclone:
-    image: ghcr.io/workerspages/alist-rclone:latest
+    image: ghcr.io/workerspages/alist-rclone:main
     container_name: alist-rclone
     restart: unless-stopped
     ports:
