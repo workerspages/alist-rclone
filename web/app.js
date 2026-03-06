@@ -6,6 +6,8 @@ const App = {
     currentPage: 'dashboard',
     currentLogService: 'alist',
     statusInterval: null,
+    remotesList: [],
+    editingRemoteName: null,
 
     // ========================
     // Init
@@ -240,7 +242,8 @@ const App = {
         container.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>加载中...</p></div>';
         try {
             const data = await this.api('GET', '/console-api/rclone/remotes');
-            if (!data.remotes || data.remotes.length === 0) {
+            this.remotesList = data.remotes || [];
+            if (!this.remotesList || this.remotesList.length === 0) {
                 container.innerHTML = `
                     <div class="empty-state">
                         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -251,7 +254,7 @@ const App = {
                     </div>`;
                 return;
             }
-            container.innerHTML = data.remotes
+            container.innerHTML = this.remotesList
                 .map((r) => {
                     const params = Object.entries(r)
                         .filter(([k]) => k !== 'name' && k !== 'type')
@@ -267,6 +270,9 @@ const App = {
                             <div class="remote-card-actions">
                                 <button class="btn-icon" onclick="App.testRemote('${this.escapeHtml(r.name)}')" title="测试连接">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                                </button>
+                                <button class="btn-icon" onclick="App.editRemote('${this.escapeHtml(r.name)}')" title="编辑">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                                 </button>
                                 <button class="btn-icon" onclick="App.deleteRemote('${this.escapeHtml(r.name)}')" title="删除">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
@@ -310,14 +316,20 @@ const App = {
     providersList: null,
 
     async showAddRemoteModal() {
+        this.editingRemoteName = null;
         document.getElementById('modal-title').textContent = '添加远程存储';
-        document.getElementById('remote-name').value = '';
+        const nameInput = document.getElementById('remote-name');
+        nameInput.value = '';
+        nameInput.disabled = false;
+        
+        const typeSelect = document.getElementById('remote-type');
+        typeSelect.disabled = false;
+
         document.getElementById('remote-params').innerHTML = '';
         document.getElementById('modal-overlay').classList.add('active');
         // Load providers if not cached
-        const select = document.getElementById('remote-type');
         if (!this.providersList || this.providersList.length === 0) {
-            select.innerHTML = '<option value="">-- 加载中... --</option>';
+            typeSelect.innerHTML = '<option value="">-- 加载中... --</option>';
             try {
                 const data = await this.api('GET', '/console-api/rclone/providers');
                 this.providersList = (data.providers || []).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -327,13 +339,82 @@ const App = {
             } catch (err) {
                 this.providersList = null;
                 this.toast('加载存储类型失败: ' + (err.message || err), 'error');
-                select.innerHTML = '<option value="">-- 加载失败，请重试 --</option>';
+                typeSelect.innerHTML = '<option value="">-- 加载失败，请重试 --</option>';
                 return;
             }
         }
-        select.innerHTML = '<option value="">-- 选择类型 (' + this.providersList.length + ' 种) --</option>' +
+        typeSelect.innerHTML = '<option value="">-- 选择类型 (' + this.providersList.length + ' 种) --</option>' +
             this.providersList.map(p => `<option value="${this.escapeHtml(p.prefix || p.name)}">${this.escapeHtml(p.prefix || p.name)} — ${this.escapeHtml(p.description || '')}</option>`).join('');
-        select.value = '';
+        typeSelect.value = '';
+    },
+
+    async editRemote(name) {
+        const remote = (this.remotesList || []).find(r => r.name === name);
+        if (!remote) {
+            this.toast('找不到该配置', 'error');
+            return;
+        }
+
+        this.editingRemoteName = name;
+        document.getElementById('modal-title').textContent = '修改远程存储';
+        
+        const nameInput = document.getElementById('remote-name');
+        nameInput.value = remote.name;
+        nameInput.disabled = true;
+
+        const typeSelect = document.getElementById('remote-type');
+        typeSelect.disabled = true;
+        
+        document.getElementById('modal-overlay').classList.add('active');
+
+        if (!this.providersList || this.providersList.length === 0) {
+            typeSelect.innerHTML = '<option value="">-- 加载中... --</option>';
+            try {
+                const data = await this.api('GET', '/console-api/rclone/providers');
+                this.providersList = (data.providers || []).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            } catch (err) {
+                this.toast('加载存储类型失败', 'error');
+                return;
+            }
+        }
+        
+        typeSelect.innerHTML = '<option value="">-- 选择类型 (' + this.providersList.length + ' 种) --</option>' +
+            this.providersList.map(p => `<option value="${this.escapeHtml(p.prefix || p.name)}">${this.escapeHtml(p.prefix || p.name)} — ${this.escapeHtml(p.description || '')}</option>`).join('');
+            
+        typeSelect.value = remote.type;
+
+        this.renderRemoteParams(remote.type);
+        
+        // Fill params asynchronously right after rendering logic
+        setTimeout(() => {
+            const params = Object.entries(remote).filter(([k]) => k !== 'name' && k !== 'type');
+            params.forEach(([k, v]) => {
+                const el = document.querySelector(`#remote-params [data-param="${k}"]`);
+                if (el) {
+                    el.value = v;
+                } else if (remote.type) {
+                    // It's a generic param row
+                    const genericRows = document.getElementById('generic-param-rows');
+                    if (genericRows) {
+                        const row = document.createElement('div');
+                        row.className = 'param-input-row';
+                        row.innerHTML = `
+                            <input type="text" data-param-key value="${this.escapeHtml(k)}" placeholder="参数名" class="param-key-input">
+                            <input type="text" data-param-val value="${this.escapeHtml(v)}" placeholder="参数值" class="param-val-input">
+                            <button class="btn-icon" onclick="this.closest('.param-input-row').remove()" title="删除">✕</button>`;
+                        genericRows.appendChild(row);
+                    }
+                }
+            });
+            // remove empty first row if generic
+            const genericRowsContainer = document.getElementById('generic-param-rows');
+            if (genericRowsContainer) {
+                const rows = genericRowsContainer.querySelectorAll('.param-input-row');
+                if (rows.length > 1 && !rows[0].querySelector('[data-param-key]').value) {
+                    rows[0].remove();
+                }
+            }
+        }, 10);
     },
 
     closeModal() {
@@ -485,7 +566,7 @@ const App = {
     async saveRemote() {
         const name = document.getElementById('remote-name').value.trim();
         const type = document.getElementById('remote-type').value;
-        if (!name || !type) {
+        if (!name || (!type && !this.editingRemoteName)) { // Type might be disabled but readable. However just in case.
             this.toast('请填写名称和类型', 'error');
             return;
         }
@@ -502,13 +583,18 @@ const App = {
             if (key && val) parameters[key] = val;
         });
         try {
-            await this.api('POST', '/console-api/rclone/remote', { name, type, parameters });
-            this.toast(`远程存储 "${name}" 创建成功`, 'success');
+            if (this.editingRemoteName) {
+                await this.api('PUT', '/console-api/rclone/remote/' + encodeURIComponent(this.editingRemoteName), { parameters });
+                this.toast(`远程存储 "${this.editingRemoteName}" 更新成功`, 'success');
+            } else {
+                await this.api('POST', '/console-api/rclone/remote', { name, type, parameters });
+                this.toast(`远程存储 "${name}" 创建成功`, 'success');
+            }
             this.closeModal();
             this.loadRemotes();
             this.loadRemoteCount();
         } catch (err) {
-            this.toast('创建失败: ' + err.message, 'error');
+            this.toast((this.editingRemoteName ? '更新' : '创建') + '失败: ' + err.message, 'error');
         }
     },
 
