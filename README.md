@@ -95,6 +95,7 @@ docker compose up -d
 | `DB_NAME` | `alist` | ❌ | 外部数据库库名（需要提前在数据库中创建） |
 | `DB_TABLE_PREFIX` | `alist_` | ❌ | 外部数据库表前缀 |
 | `DB_SSL_MODE` | - | ❌ | 外部数据库 SSL 模式，例如 TiDB Cloud 需填写 `true` |
+| `CUSTOM_CA_CERT_PATH` | - | ❌ | 自定义 CA 证书的容器内路径（可为文件或目录），用于信任私有/自签证书 |
 
 > ⚠️ **安全提示**：首次部署时请务必修改 `WEB_PASSWORD` 和 `ALIST_ADMIN_PASSWORD`，不要使用默认值。
 

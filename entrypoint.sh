@@ -11,6 +11,22 @@ if [ -n "$TZ" ]; then
     echo "$TZ" > /etc/timezone
 fi
 
+# ---- Custom CA Certificates ----
+if [ -n "$CUSTOM_CA_CERT_PATH" ]; then
+    if [ -f "$CUSTOM_CA_CERT_PATH" ]; then
+        echo "[Init] Loading custom CA certificate from file: $CUSTOM_CA_CERT_PATH"
+        cp "$CUSTOM_CA_CERT_PATH" /usr/local/share/ca-certificates/custom-ca.crt
+        update-ca-certificates
+        export NODE_EXTRA_CA_CERTS="$CUSTOM_CA_CERT_PATH"
+    elif [ -d "$CUSTOM_CA_CERT_PATH" ]; then
+        echo "[Init] Loading custom CA certificates from directory: $CUSTOM_CA_CERT_PATH"
+        cp "$CUSTOM_CA_CERT_PATH"/* /usr/local/share/ca-certificates/ 2>/dev/null || true
+        update-ca-certificates
+    else
+        echo "[Warning] CUSTOM_CA_CERT_PATH ($CUSTOM_CA_CERT_PATH) is not a valid file or directory"
+    fi
+fi
+
 # ---- Initialize Alist ----
 echo "[Init] Initializing Alist..."
 if [ ! -f /data/alist/config.json ]; then
