@@ -58,6 +58,19 @@ pass = $OBSCURED_PASS
 EOF
 fi
 
+# Auto-add local host directory as alias remote
+HOST_REMOTE_NAME="host"
+if ! grep -q "\[$HOST_REMOTE_NAME\]" /data/rclone/rclone.conf; then
+    echo "[Init] Adding local host directory as alias remote '$HOST_REMOTE_NAME'..."
+    mkdir -p /opt/host
+    cat >> /data/rclone/rclone.conf <<EOF
+
+[$HOST_REMOTE_NAME]
+type = alias
+remote = /opt/host
+EOF
+fi
+
 # ---- Set environment for API server ----
 export WEB_USERNAME="${WEB_USERNAME:-admin}"
 export WEB_PASSWORD="${WEB_PASSWORD:-admin}"

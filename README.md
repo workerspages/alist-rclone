@@ -25,12 +25,15 @@ docker run -d \
   --name alist-rclone \
   -p 5000:80 \
   -v $(pwd)/data:/data \
+  -v $(pwd)/host:/opt/host \
   -e WEB_USERNAME=admin \
   -e WEB_PASSWORD=your_password \
   -e ALIST_ADMIN_PASSWORD=your_alist_password \
   -e TZ=Asia/Shanghai \
   ghcr.io/workerspages/alist-rclone:latest
 ```
+
+> 💡 `-v $(pwd)/host:/opt/host` 用于将宿主机目录挂载到容器中。容器会自动在 Rclone 配置中添加一个名为 `host` 的本地驱动，方便你在网页上将网盘文件与宿主机直接互拷。
 
 ### 方式二：Docker Compose（推荐）
 
@@ -46,6 +49,7 @@ services:
       - "5000:80"
     volumes:
       - ./data:/data
+      - ./host:/opt/host  # 映射宿主机目录至容器内，用于本地与网盘间的文件传输
     environment:
       - TZ=Asia/Shanghai
       - WEB_USERNAME=admin
