@@ -140,6 +140,30 @@ docker compose up -d
 4. **Alist 文件管理** — 内嵌 Alist 管理主打界面，一站式管理所有文件
 5. **日志** — 在线查看 Alist、Rclone、Nginx、API 的运行日志
 
+### 🔌 后端 API 使用指南
+
+如果您希望通过脚本自动化调用控制器功能（如触发定时任务等），可以直接调用 `/console-api/` 接口：
+
+**1. 获取 Token (登录)**
+```http
+POST /console-api/login
+Content-Type: application/json
+
+{"username": "admin", "password": "your_password"}
+```
+响应中将返回 `token`。
+
+**2. 调用接口**
+在后续其他请求中放入 Header 即可通信：
+`Authorization: Bearer <获取到的 Token>`
+
+**常用端点示例**：
+- `GET /console-api/status` : 获取容器各服务运行状态
+- `GET /console-api/rclone/remotes` : 枚举所有网盘配置
+- `POST /console-api/tasks/{task_id}/run` : 立即触发执行某个转移任务
+- `POST /console-api/service/restart` : 重启 Alist/Rclone 服务 (`{"service": "alist"}`)
+*(如果需要更详尽的接口，请查阅容器内的 `server/index.js` 路由定义)*
+
 ---
 
 ## 📁 数据持久化
