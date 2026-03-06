@@ -5,12 +5,14 @@ const fs = require('fs');
 const http = require('http');
 const cron = require('node-cron');
 const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 app.use(express.json());
 
 const PORT = 3001;
-const JWT_SECRET = process.env.JWT_SECRET || 'alist-rclone-secret-key-' + Date.now();
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
 const WEB_USERNAME = process.env.WEB_USERNAME || 'admin';
 const WEB_PASSWORD = process.env.WEB_PASSWORD || 'admin';
 const RCLONE_ADDR = process.env.RCLONE_ADDR || 'http://127.0.0.1:5572';
@@ -62,13 +64,44 @@ function rcloneRC(command, params = {}) {
 // ========================
 // Auth Routes
 // ========================
-app.post('/api/login', (req, res) => {
+// Login rate limiter: Max 5 attempts per 15 minutes
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: '登录尝试次数过多，请 15 分钟后再试' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.post('/api/login', loginLimiter, (req, res) => {
   const { username, password } = req.body;
-  if (username === WEB_USERNAME && password === WEB_PASSWORD) {
-    const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '24h' });
-    res.cookie('_auth_token', token, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 86400000 });
-    return res.json({ token, username });
+
+  if (!username || !password) {
+    return res.status(401).json({ error: 'Invalid credentials' });
   }
+
+  // Prevent timing attacks using timingSafeEqual
+  const expectedUser = Buffer.from(WEB_USERNAME);
+  const expectedPass = Buffer.from(WEB_PASSWORD);
+  const providedUser = Buffer.from(username);
+  const providedPass = Buffer.from(password);
+
+  let userMatch = false;
+  let passMatch = false;
+
+  if (expectedUser.length === providedUser.length) {
+    userMatch = crypto.timingSafeEqual(expectedUser, providedUser);
+  }
+  if (expectedPass.length === providedPass.length) {
+    passMatch = crypto.timingSafeEqual(expectedPass, providedPass);
+  }
+
+  if (userMatch && passMatch) {
+    const token = jwt.sign({ username: WEB_USERNAME }, JWT_SECRET, { expiresIn: '24h' });
+    res.cookie('_auth_token', token, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 86400000 });
+    return res.json({ token, username: WEB_USERNAME });
+  }
+
   return res.status(401).json({ error: 'Invalid credentials' });
 });
 
