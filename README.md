@@ -82,11 +82,11 @@ docker compose up -d
 
 | 变量 | 默认值 | 必填 | 说明 |
 |------|--------|:---:|------|
-| `WEB_USERNAME` | `admin` | ❌ | Web 控制台登录用户名 |
+| `WEB_USERNAME` | `admin` | ✅ | Web 控制台登录用户名 |
 | `WEB_PASSWORD` | `admin` | ⚠️ | Web 控制台登录密码，**强烈建议修改** |
-| `ALIST_ADMIN_USERNAME` | `admin` | ❌ | Alist 管理员用户名 |
+| `ALIST_ADMIN_USERNAME` | `admin` | ✅ | Alist 管理员用户名 |
 | `ALIST_ADMIN_PASSWORD` | `admin` | ⚠️ | Alist 管理员密码，**强烈建议修改** |
-| `TZ` | `Asia/Shanghai` | ❌ | 容器时区 |
+| `TZ` | `Asia/Shanghai` | ✅ | 容器时区 |
 | `DB_TYPE` | `sqlite3` | ❌ | 外部数据库类型，如 `mysql` / `postgres`。配置外部数据库（如 TiDB）时必须设置为 `mysql` |
 | `DB_HOST` | - | ❌ | 外部数据库地址（主机名或 IP） |
 | `DB_PORT` | `3306` | ❌ | 外部数据库端口（TiDB Cloud 免费集群多为 `4000`） |
