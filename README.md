@@ -50,7 +50,7 @@ services:
       - "5000:80"
     volumes:
       - ./data:/data
-      - ./host:/opt/host # 映射宿主机目录至容器内，用于本地与网盘间的文件传输
+      - ./host:/opt/host:ro # 映射宿主机目录至容器内，用于本地与网盘间的文件传输
     environment:
       - TZ=Asia/Shanghai
       # Web 控制台登录凭据
