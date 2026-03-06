@@ -699,7 +699,7 @@ const App = {
                 }
                 
                 if (typeof value === 'string' && /^\d+$/.test(value)) {
-                    if (['transfers', 'checkers', 'retries'].includes(flag)) {
+                    if (['transfers', 'checkers', 'retries', 'low-level-retries', 'max-depth', 'max-backlog', 'tpslimit', 'tpslimit-burst', 'stats-interval'].includes(flag)) {
                         value = parseInt(value, 10);
                     }
                 }

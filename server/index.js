@@ -408,7 +408,14 @@ async function executeTask(task) {
   const params = { srcFs, dstFs, _async: true };
   if (task.advancedOptions) {
     if (task.advancedOptions._config && Object.keys(task.advancedOptions._config).length) {
-      params._config = task.advancedOptions._config;
+      const config = { ...task.advancedOptions._config };
+      const intFields = ['Transfers', 'Checkers', 'Retries', 'LowLevelRetries', 'MaxDepth', 'MaxBacklog', 'Tpslimit', 'TpslimitBurst', 'StatsInterval'];
+      for (const field of intFields) {
+        if (typeof config[field] === 'string' && /^\d+$/.test(config[field])) {
+          config[field] = parseInt(config[field], 10);
+        }
+      }
+      params._config = config;
     }
     if (task.advancedOptions._filter && Object.keys(task.advancedOptions._filter).length) {
       params._filter = task.advancedOptions._filter;
