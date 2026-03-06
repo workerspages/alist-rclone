@@ -26,7 +26,7 @@ docker run -d \
   --name alist-rclone \
   -p 5000:80 \
   -v $(pwd)/data:/data \
-  -v $(pwd)/host:/opt/host \
+  -v $(pwd)/host:/opt/host:ro \
   -e WEB_USERNAME=admin \
   -e WEB_PASSWORD=your_password \
   -e ALIST_ADMIN_PASSWORD=your_alist_password \
