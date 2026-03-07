@@ -1665,3 +1665,95 @@ body {
         padding: 32px 24px;
     }
 }
+/* ========================================
+   Live Status Terminal Viewer
+   ======================================== */
+.live-terminal-wrapper {
+    background: #000;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - var(--header-height) - 56px);
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.terminal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: #1e1e1e;
+    border-bottom: 1px solid #333;
+}
+
+.terminal-title {
+    font-size: 0.85rem;
+    color: #ccc;
+    font-weight: 500;
+    font-family: inherit;
+}
+
+.terminal-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.live-indicator {
+    font-size: 0.75rem;
+    color: var(--success);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    animation: blink 2s infinite;
+}
+
+.live-indicator.offline {
+    color: var(--danger);
+    animation: none;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.terminal-viewer {
+    flex: 1;
+    background: transparent;
+    padding: 16px;
+    font-family: 'Consolas', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    color: #e0e0e0;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.terminal-viewer::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+.terminal-viewer::-webkit-scrollbar-track {
+    background: #111;
+}
+
+.terminal-viewer::-webkit-scrollbar-thumb {
+    background: #333;
+    border: 2px solid #111;
+    border-radius: 5px;
+}
+
+.terminal-viewer::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+.term-color-green { color: #4ade80; }
+.term-color-blue { color: #60a5fa; }
+.term-color-yellow { color: #facc15; }
+.term-color-gray { color: #9ca3af; }
+.term-color-red { color: #f87171; }

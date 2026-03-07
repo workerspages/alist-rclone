@@ -6,6 +6,7 @@ const App = {
     currentPage: 'dashboard',
     currentLogService: 'alist',
     statusInterval: null,
+    liveStatusInterval: null,
     remotesList: [],
     editingRemoteName: null,
 
@@ -120,6 +121,7 @@ const App = {
         localStorage.removeItem('auth_token');
         document.cookie = '_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
         if (this.statusInterval) clearInterval(this.statusInterval);
+        if (this.liveStatusInterval) clearInterval(this.liveStatusInterval);
         this.showLogin();
     },
 
@@ -154,15 +156,24 @@ const App = {
             'rclone-config': 'Rclone 配置管理',
             transfer: '定时任务',
             alist: 'Alist 文件管理',
+            'live-status': '实时状态',
             'rclone-gui': 'Rclone Web GUI',
             logs: '日志查看器',
         };
         document.getElementById('page-title').textContent = titles[page] || page;
+        
+        // Clean up live status interval if leaving page
+        if (page !== 'live-status' && this.liveStatusInterval) {
+            clearInterval(this.liveStatusInterval);
+            this.liveStatusInterval = null;
+        }
+
         // Load page data
         if (page === 'dashboard') this.loadDashboard();
         if (page === 'rclone-config') this.loadRemotes();
         if (page === 'transfer') this.loadTasksPage();
         if (page === 'alist') this.loadAlistFrame();
+        if (page === 'live-status') this.loadLiveStatus();
 
         if (page === 'logs') this.loadLogs(this.currentLogService);
         // Close mobile sidebar
@@ -637,8 +648,114 @@ const App = {
 
 
     // ========================
-    // Logs
+    // Live Status Viewer
     // ========================
+    loadLiveStatus() {
+        if (this.liveStatusInterval) clearInterval(this.liveStatusInterval);
+        this.refreshLiveStatus();
+        this.liveStatusInterval = setInterval(() => this.refreshLiveStatus(), 1000);
+    },
+
+    async refreshLiveStatus() {
+        const viewer = document.getElementById('live-terminal');
+        const indicator = document.getElementById('live-indicator');
+        
+        try {
+            // Fetch stats and last 30 lines of logs simultaneously
+            const [statsRes, logsRes] = await Promise.all([
+                this.api('GET', '/console-api/rclone/stats').catch(() => null),
+                this.api('GET', '/console-api/logs/rclone?lines=30').catch(() => null)
+            ]);
+            
+            indicator.textContent = '● 连接中';
+            indicator.className = 'live-indicator';
+            
+            let output = '';
+            
+            // Format logs (top part)
+            if (logsRes && logsRes.log) {
+                const logLines = logsRes.log.split('\n').filter(l => l.trim().length > 0);
+                
+                output += logLines.map(line => {
+                    // Simple coloring based on log level keywords
+                    let lineClass = 'term-color-gray';
+                    if (line.includes('ERROR :')) lineClass = 'term-color-red';
+                    else if (line.includes('INFO  :')) lineClass = 'term-color-blue';
+                    else if (line.includes('NOTICE:')) lineClass = 'term-color-yellow';
+                    return `<span class="${lineClass}">${this.escapeHtml(line)}</span>`;
+                }).join('\n');
+                
+                output += '\n\n';
+            }
+            
+            // Format stats (bottom part)
+            if (statsRes && !statsRes.error) {
+                const s = statsRes;
+                
+                const formatBytes = (bytes) => {
+                    if (bytes === 0) return '0 B';
+                    const k = 1024;
+                    const sizes = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(3)) + ' ' + sizes[i];
+                };
+                
+                const formatTime = (seconds) => {
+                    if (!seconds || seconds <= 0) return '0s';
+                    const d = Math.floor(seconds / 86400);
+                    const h = Math.floor((seconds % 86400) / 3600);
+                    const m = Math.floor((seconds % 3600) / 60);
+                    const sPart = Math.floor(seconds % 60);
+                    let res = '';
+                    if(d>0) res += d + 'w'; // Wait, in rclone d is w? Usually d=days, w=weeks. Let's stick to standard: d, h, m, s
+                    if(d>0) res += d + 'd'; 
+                    if(h>0) res += h + 'h';
+                    if(m>0) res += m + 'm';
+                    res += sPart + 's';
+                    return res;
+                };
+
+                const bytesText = `<span class="term-color-green">${formatBytes(s.bytes)}</span> / <span class="term-color-green">${formatBytes(s.totalBytes)}</span>`;
+                const percentText = s.totalBytes > 0 ? ((s.bytes / s.totalBytes) * 100).toFixed(0) + '%' : '0%';
+                const speedText = `<span class="term-color-green">${formatBytes(s.speed)}/s</span>`;
+                const etaText = s.eta ? `ETA ${formatTime(s.eta)}` : 'ETA -';
+                
+                output += `Transferred:   	${bytesText}, ${percentText}, ${speedText}, ${etaText}\n`;
+                output += `Errors:        	${s.errors}\n`;
+                output += `Checks:        	${s.checks} / ${s.checks}, 100%\n`;
+                output += `Transferred:   	${s.transfers} / ${s.transfers}, 100%\n`;
+                output += `Elapsed time:  	${formatTime(s.elapsedTime)}\n`;
+                
+                if (s.transferring && s.transferring.length > 0) {
+                    output += `Transferring:\n`;
+                    s.transferring.forEach(t => {
+                        const name = t.name || '';
+                        const p = t.percentage || 0;
+                        const sz = formatBytes(t.size);
+                        const spd = formatBytes(t.speed) + '/s';
+                        const tet = formatTime(t.eta);
+                        output += ` * ${this.escapeHtml(name)}: ${p}% /${sz}, ${spd}, ${tet}\n`;
+                    });
+                }
+            } else {
+                output += `\n<span class="term-color-red">获取状态失败，验证 Rclone 是否在运行</span>`;
+            }
+            
+            // Keep viewer scrolled to bottom
+            const isScrolledToBottom = viewer.scrollHeight - viewer.clientHeight <= viewer.scrollTop + 50;
+            
+            viewer.innerHTML = output || '暂无数据';
+            
+            if (isScrolledToBottom) {
+                viewer.scrollTop = viewer.scrollHeight;
+            }
+            
+        } catch (err) {
+            indicator.textContent = '● 离线';
+            indicator.className = 'live-indicator offline';
+            viewer.innerHTML = '<span class="term-color-red">连接 Rclone API 失败</span>\n' + err.message;
+        }
+    },
     async loadLogs(service) {
         const viewer = document.getElementById('log-viewer');
         viewer.textContent = '加载中...';
