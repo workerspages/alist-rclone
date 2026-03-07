@@ -5,6 +5,20 @@ echo "============================================"
 echo "  Alist-Rclone All-in-One Container"
 echo "============================================"
 
+# ---- Setup Swap Memory ----
+if [ -n "$SWAP_SIZE_MB" ] && [ "$SWAP_SIZE_MB" -gt 0 ] 2>/dev/null; then
+    echo "[Init] Setting up swap space of ${SWAP_SIZE_MB}MB..."
+    swapoff /swapfile 2>/dev/null || true
+    if [ ! -f /swapfile ] || [ "$(stat -c %s /swapfile 2>/dev/null || echo 0)" -ne "$((SWAP_SIZE_MB * 1024 * 1024))" ]; then
+        echo "[Init] Creating /swapfile..."
+        dd if=/dev/zero of=/swapfile bs=1M count="$SWAP_SIZE_MB" 2>/dev/null
+        chmod 600 /swapfile
+        mkswap /swapfile
+    fi
+    echo "[Init] Enabling swap..."
+    swapon /swapfile || echo "[Warning] Failed to enable swap. This may require --privileged or CAP_SYS_ADMIN capabilities."
+fi
+
 # ---- Timezone ----
 if [ -n "$TZ" ]; then
     ln -snf /usr/share/zoneinfo/$TZ /etc/localtime
