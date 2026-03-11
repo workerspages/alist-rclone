@@ -442,7 +442,7 @@ async function executeTask(task) {
   if (task.advancedOptions) {
     if (task.advancedOptions._config && Object.keys(task.advancedOptions._config).length) {
       const config = { ...task.advancedOptions._config };
-      const intFields = ['Transfers', 'Checkers', 'Retries', 'LowLevelRetries', 'MaxDepth', 'MaxBacklog', 'Tpslimit', 'TpslimitBurst', 'StatsInterval'];
+      const intFields = ['Transfers', 'Checkers', 'Retries', 'LowLevelRetries', 'MaxDepth', 'MaxBacklog', 'Tpslimit', 'TpslimitBurst', 'StatsInterval', 'MultiThreadStreams', 'MultiThreadCutoff', 'BufferSize'];
       for (const field of intFields) {
         if (typeof config[field] === 'string' && /^\d+$/.test(config[field])) {
           config[field] = parseInt(config[field], 10);
