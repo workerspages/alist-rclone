@@ -816,7 +816,7 @@ const App = {
                 }
                 
                 if (typeof value === 'string' && /^\d+$/.test(value)) {
-                    if (['transfers', 'checkers', 'retries', 'low-level-retries', 'max-depth', 'max-backlog', 'tpslimit', 'tpslimit-burst', 'stats-interval'].includes(flag)) {
+                    if (['transfers', 'checkers', 'retries', 'low-level-retries', 'max-depth', 'max-backlog', 'tpslimit', 'tpslimit-burst', 'stats-interval', 'buffer-size', 'multi-thread-streams', 'multi-thread-cutoff', 'chunk-size', 'drive-chunk-size', 'vfs-read-chunk-size'].includes(flag)) {
                         value = parseInt(value, 10);
                     }
                 }
