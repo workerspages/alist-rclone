@@ -520,10 +520,14 @@ const App = {
                 { name: 'pass', label: '密码', placeholder: '', sensitive: true },
                 {
                     name: 'vendor', label: '供应商', type: 'select', options: [
-                        { value: 'other', label: '其他' },
+                        { value: 'rclone', label: 'rclone WebDAV' },
+                        { value: 'fastmail', label: 'Fastmail Files' },
                         { value: 'nextcloud', label: 'Nextcloud' },
                         { value: 'owncloud', label: 'ownCloud' },
-                        { value: 'sharepoint', label: 'SharePoint' },
+                        { value: 'infinitescale', label: 'ownCloud Infinite Scale' },
+                        { value: 'sharepoint', label: 'SharePoint Online' },
+                        { value: 'sharepoint-ntlm', label: 'SharePoint NTLM' },
+                        { value: 'other', label: '其他' },
                     ]
                 },
             ],
