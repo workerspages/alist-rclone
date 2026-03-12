@@ -500,8 +500,8 @@ const App = {
                 },
                 { name: 'access_key_id', label: 'Access Key ID', placeholder: 'AKIAIOSFODNN7EXAMPLE' },
                 { name: 'secret_access_key', label: 'Secret Access Key', placeholder: '密钥', sensitive: true },
-                { name: 'region', label: '区域', placeholder: 'us-east-1' },
-                { name: 'endpoint', label: 'Endpoint', placeholder: '留空使用默认' },
+                { name: 'region', label: '区域 (Region)', placeholder: 'us-east-1' },
+                { name: 'endpoint', label: '服务地址 (Endpoint)', placeholder: '例如: https://s3.example.com (留空使用默认)' },
             ],
             drive: [
                 { name: 'client_id', label: 'Client ID', placeholder: '留空使用内置' },
