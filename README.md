@@ -24,7 +24,7 @@
 ```bash
 docker run -d \
   --name alist-rclone \
-  -p 5000:80 \
+  -p 5000:8080 \
   -v $(pwd)/data:/data \
   -v $(pwd)/host:/opt/host:ro \
   -e WEB_USERNAME=admin \
@@ -47,7 +47,7 @@ services:
     container_name: alist-rclone
     restart: unless-stopped
     ports:
-      - "5244:80"
+      - "5244:8080"
     volumes:
       - ./data:/data
       - ./host:/opt/host:ro # 映射宿主机目录至容器内，用于本地与网盘间的文件传输
@@ -73,7 +73,7 @@ docker compose up -d
 大多数 PaaS 平台（如 Railway、Render、Zeabur 等）支持直接使用 Docker 镜像部署：
 
 1. **镜像地址**：`ghcr.io/workerspages/alist-rclone:main`
-2. **端口**：设置为 `80`
+2. **端口**：设置为 `8080`
 3. **环境变量**：按下方表格配置
 4. **持久化存储**：挂载 `/data` 目录（如平台支持）
 
@@ -230,7 +230,7 @@ Rclone 配置好远程存储后，可以在 Alist 中添加存储驱动时选择
 git clone https://github.com/workerspages/alist-rclone.git
 cd alist-rclone
 docker build -t alist-rclone .
-docker run -d -p 5000:80 -v $(pwd)/data:/data alist-rclone
+docker run -d -p 5000:8080 -v $(pwd)/data:/data alist-rclone
 ```
 
 ## 📄 License

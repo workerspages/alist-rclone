@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(express.json());
 
 const PORT = 3001;
@@ -244,7 +245,7 @@ app.get('/api/logs/:service', authMiddleware, (req, res) => {
     api: '/var/log/api.log',
   };
   try {
-    const lines = req.query.lines || 100;
+    const lines = parseInt(req.query.lines, 10) || 100;
     const log = execSync(`tail -n ${lines} ${logMap[service]} 2>/dev/null || echo "No logs available"`, {
       encoding: 'utf-8',
       timeout: 5000,
@@ -266,11 +267,12 @@ app.post('/api/rclone/test', authMiddleware, async (req, res) => {
     // Rclone RC API often returns 200 OK and empty list for invalid webdav/http configs
     // Therefore, using CLI commands directly is the most reliable way to catch connection errors.
     const util = require('util');
-    const execPromise = util.promisify(exec);
+    const { execFile } = require('child_process');
+    const execFilePromise = util.promisify(execFile);
 
     try {
       // Use lsf to list the first level of items. It will throw an error if connection fails.
-      const { stdout } = await execPromise(`rclone lsf "${fsPath}" --max-depth 1 --config=/data/rclone/rclone.conf`, { timeout: 15000 });
+      const { stdout } = await execFilePromise('rclone', ['lsf', fsPath, '--max-depth', '1', '--config=/data/rclone/rclone.conf'], { timeout: 15000 });
       const elapsed = Date.now() - start;
       const count = stdout.split('\n').filter(line => line.trim().length > 0).length;
       res.json({ ok: true, message: `连接成功！响应耗时: ${elapsed}ms, 根目录可见 ${count} 个项目。` });

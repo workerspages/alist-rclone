@@ -4,7 +4,7 @@ services:
     container_name: alist-rclone
     restart: unless-stopped
     ports:
-      - "5244:80"
+      - "5244:8080"
     volumes:
       - ./data:/data
       - ./host:/opt/host:ro # 映射宿主机目录至容器内，用于本地与网盘间的文件传输
