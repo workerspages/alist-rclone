@@ -466,6 +466,21 @@ async function executeTask(task) {
   }
 }
 
+// 检查任务是否正在运行
+async function isTaskRunning(task) {
+  if (!task.activeJobId) return false;
+  try {
+    const jobStatus = await rcloneRC('/job/status', { jobid: task.activeJobId });
+    // 如果查询成功且 finished 字段为 false，说明该 job 仍在运行中
+    if (jobStatus && jobStatus.finished === false) {
+      return true;
+    }
+  } catch (err) {
+    // 报错说明 job 已经不存在（例如 rclone 重启过），认为没有在运行
+  }
+  return false;
+}
+
 function scheduleTask(task) {
   unscheduleTask(task.id);
   if (!task.enabled || !task.cron) return;
@@ -479,9 +494,17 @@ function scheduleTask(task) {
     const t = tasks.find(x => x.id === task.id);
     if (!t || !t.enabled) return;
 
+    // 定时任务防重复执行锁
+    if (await isTaskRunning(t)) {
+      console.log(`[Scheduler] Task ${t.name} is already running, skipping this scheduled run.`);
+      return;
+    }
+
     const record = await executeTask(t);
     t.lastRun = record.time;
     t.lastStatus = record.status;
+    t.activeJobId = record.jobId; // 保存启动的 jobId 以供下次判断
+    
     if (!t.history) t.history = [];
     t.history.unshift(record);
     if (t.history.length > 50) t.history = t.history.slice(0, 50);
@@ -537,6 +560,7 @@ app.post('/api/tasks', authMiddleware, (req, res) => {
     advancedOptions: advancedOptions || {},
     lastRun: null,
     lastStatus: null,
+    activeJobId: null,
     history: [],
     createdAt: new Date().toISOString(),
   };
@@ -588,9 +612,16 @@ app.post('/api/tasks/:id/run', authMiddleware, async (req, res) => {
   const task = tasks.find(t => t.id === req.params.id);
   if (!task) return res.status(404).json({ error: '任务不存在' });
 
+  // 手动触发任务防重复执行锁
+  if (await isTaskRunning(task)) {
+    return res.status(400).json({ error: '当前任务正在执行中，请勿重复触发' });
+  }
+
   const record = await executeTask(task);
   task.lastRun = record.time;
   task.lastStatus = record.status;
+  task.activeJobId = record.jobId; // 保存启动的 jobId 以供下次判断
+  
   if (!task.history) task.history = [];
   task.history.unshift(record);
   if (task.history.length > 50) task.history = task.history.slice(0, 50);
