@@ -612,9 +612,12 @@ app.post('/api/tasks/:id/run', authMiddleware, async (req, res) => {
   const task = tasks.find(t => t.id === req.params.id);
   if (!task) return res.status(404).json({ error: '任务不存在' });
 
-  // 手动触发任务防重复执行锁
+  // 手动触发任务防重复执行锁，适配前端 UI 解析结构
   if (await isTaskRunning(task)) {
-    return res.status(400).json({ error: '当前任务正在执行中，请勿重复触发' });
+    return res.json({ 
+      success: false, 
+      record: { status: 'error', message: '当前任务正在执行中，请勿重复触发' } 
+    });
   }
 
   const record = await executeTask(task);
