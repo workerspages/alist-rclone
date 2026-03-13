@@ -43,7 +43,7 @@ cd /root/alist-rclone
 **第二步：将整个 data 目录打包为 tar.gz**
 
 ```bash
-tar -czvf data_backup.tar.gz -C data .
+tar --exclude='alist/temp' -czvf data_backup.tar.gz -C data .
 
 ```
 
