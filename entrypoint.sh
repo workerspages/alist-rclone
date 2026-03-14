@@ -41,6 +41,14 @@ if [ -n "$CUSTOM_CA_CERT_PATH" ]; then
     fi
 fi
 
+# ---- External Storage Restore (S3/WebDAV) ----
+if [ -n "$SYNC_DEST" ]; then
+    echo "[Init] SYNC_DEST is set. Attempting to restore /data from external storage..."
+    mkdir -p /data
+    # 使用 rclone 将外部存储的数据拉取到本地 /data 目录，跳过缓存目录
+    /usr/bin/rclone copy "$SYNC_DEST" /data -v || echo "[Warning] Restore failed or remote is empty. Starting fresh."
+fi
+
 # ---- Initialize Alist ----
 echo "[Init] Initializing Alist..."
 if [ ! -f /data/alist/config.json ]; then
