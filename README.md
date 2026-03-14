@@ -112,7 +112,7 @@ docker compose up -d
 添加环境变量：
 
 ```text
-SYNC_DEST=":s3,provider='Cloudflare',endpoint='[https://xxx.r2.cloudflarestorage.com](https://xxx.r2.cloudflarestorage.com)',access_key_id='你的AK',secret_access_key='你的SK':/my-backup-bucket/alist-data"
+SYNC_DEST=":s3,provider='Cloudflare',region='auto',endpoint='https://xxx.r2.cloudflarestorage.com',access_key_id='你的AK',secret_access_key='你的SK':/存储桶名称/"
 
 ```
 
@@ -124,7 +124,7 @@ SYNC_DEST=":s3,provider='Cloudflare',endpoint='[https://xxx.r2.cloudflarestorage
 2. 将获取到的密文填入环境变量（注意 `vendor='other'` 参数也是必须的）：
 
 ```text
-SYNC_DEST=":webdav,url='[https://dav.jianguoyun.com/dav/',vendor='other',user='你的坚果云账号',pass='这里填入获取到的密文':/alist-backup-folder](https://dav.jianguoyun.com/dav/',vendor='other',user='你的坚果云账号',pass='这里填入获取到的密文':/alist-backup-folder)"
+SYNC_DEST=":webdav,url='https://dav.jianguoyun.com/dav/',user='你的账号',pass='你的应用密码':/alist-rclone"
 
 ```
 
