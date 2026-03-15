@@ -53,6 +53,37 @@ if [ -n "$SYNC_DEST" ]; then
     fi
 fi
 
+# ---- Clean Scheduled Tasks History ----
+# 它会在容器内存里利用 Node 快速扫一遍 JSON，将所有任务的 history 数组置空，同时解除了可能因为容器异常重启导致的 activeJobId 死锁。
+# 这让系统保持持久化的配置的同时，彻底阻断了日志的冗余积累
+echo "[Init] Cleaning up scheduled tasks history..."
+if [ -f /data/rclone/scheduled-tasks.json ]; then
+    node -e "
+    const fs = require('fs');
+    const file = '/data/rclone/scheduled-tasks.json';
+    try {
+        const data = JSON.parse(fs.readFileSync(file, 'utf-8'));
+        let modified = false;
+        data.forEach(t => {
+            if (t.history && t.history.length > 0) {
+                t.history = [];
+                modified = true;
+            }
+            if (t.activeJobId) {
+                t.activeJobId = null;
+                modified = true;
+            }
+        });
+        if (modified) {
+            fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf-8');
+            console.log('[Init] Successfully cleared task history.');
+        }
+    } catch(e) {
+        console.error('[Init] Failed to clean tasks history:', e.message);
+    }
+    "
+fi
+
 # ---- Initialize Alist ----
 echo "[Init] Initializing Alist..."
 if [ ! -f /data/alist/config.json ]; then
