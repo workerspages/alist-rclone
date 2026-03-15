@@ -72,7 +72,7 @@ RUN set -ex; \
     rm -rf /tmp/rclone*
 
 # Create directories
-RUN mkdir -p /app/web /app/server /data/alist /data/rclone /var/log/nginx
+RUN mkdir -p /app/web /app/server /data/alist /data/rclone /var/log/nginx /opt/host
 
 # Copy web frontend
 COPY web/ /app/web/
