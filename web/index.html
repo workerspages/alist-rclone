@@ -428,6 +428,8 @@
                                             style="color:var(--text-muted);font-size:0.73rem;margin-top:6px;display:block;line-height:1.4">示例：--include "/{Video,Software}/**" --max-size 5G --buffer-size 64M --checkers 15 --transfers 30 --ignore-errors --check-first --size-only --retries 10 --retries-sleep 30s --low-level-retries 30 --timeout 30m</small>
                                         <small class="cron-hint"
                                             style="color:var(--text-muted);font-size:0.73rem;margin-top:6px;display:block;line-height:1.4">1核1G服务器：--max-size 20G --buffer-size 0 --checkers 2 --transfers 2 --ignore-errors --size-only --retries 10 --retries-sleep 30s --low-level-retries 30 --timeout 30m --tpslimit 5 --multi-thread-streams 0 --use-mmap</small>
+                                        <small class="cron-hint"
+                                            style="color:var(--text-muted);font-size:0.73rem;margin-top:6px;display:block;line-height:1.4">1核1G服务器(115网盘版)：--max-size 5G --exclude *.{partial,crdownload} --buffer-size 16M --checkers 16 --transfers 8 --size-only --retries 10 --retries-sleep 30s --low-level-retries 30 --timeout 30m --tpslimit 5 --multi-thread-streams 0 --use-mmap --115-pacer-min-sleep 5s --ignore-existing</small>
                                     </div>
                                 </details>
                             </div>
