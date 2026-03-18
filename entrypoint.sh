@@ -103,7 +103,7 @@ fi
 
 # ---- Initialize Rclone ----
 echo "[Init] Initializing Rclone..."
-mkdir -p /data/rclone/cache
+mkdir -p /data/rclone/cache /data/rclone/cache-proxy
 if [ ! -f /data/rclone/rclone.conf ]; then
     touch /data/rclone/rclone.conf
 fi
@@ -138,7 +138,7 @@ fi
 export WEB_USERNAME="${WEB_USERNAME:-admin}"
 export WEB_PASSWORD="${WEB_PASSWORD:-admin}"
 htpasswd -cb /etc/nginx/.htpasswd "$WEB_USERNAME" "$WEB_PASSWORD"
-touch /var/log/alist.log /var/log/rclone.log /var/log/api.log
+touch /var/log/alist.log /var/log/rclone.log /var/log/rclone-proxy.log /var/log/warp.log /var/log/api.log
 
 echo "[Init] Starting services via supervisord..."
 exec /usr/bin/supervisord -c /etc/supervisord.conf

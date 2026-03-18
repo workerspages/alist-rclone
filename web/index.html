@@ -425,6 +425,16 @@
                                         <span id="task-notify-label" style="color:var(--text-secondary);font-size:0.85rem;">执行完成后发送 Bark 推送通知</span>
                                     </div>
                                     <small id="task-notify-hint" style="color:var(--text-muted);font-size:0.73rem;margin-top:6px;display:block;">需要设置环境变量 BARK_URL（如 https://api.day.app/yourkey）</small>
+                                <div class="form-group" id="task-proxy-group">
+                                    <label>启用代理 (WARP)</label>
+                                    <div style="display:flex;align-items:center;gap:12px;">
+                                        <label class="toggle-switch" title="任务通过 Cloudflare WARP 代理执行以防封 IP">
+                                            <input type="checkbox" id="task-use-proxy">
+                                            <span class="toggle-slider"></span>
+                                        </label>
+                                        <span id="task-proxy-label" style="color:var(--text-secondary);font-size:0.85rem;">任务流量经过 WARP 提供的纯净 SOCKS5 出口</span>
+                                    </div>
+                                    <small id="task-proxy-hint" style="color:var(--text-muted);font-size:0.73rem;margin-top:6px;display:block;">专为突破网盘 IP 限制设计。由局域网内双 Rclone 进程提供支持。</small>
                                 </div>
                                 <!-- Advanced Options in Task Modal -->
                                 <details class="advanced-options" id="task-advanced">

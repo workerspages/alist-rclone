@@ -70,6 +70,17 @@ RUN set -ex; \
     mv /tmp/rclone_unzip/*/rclone /usr/bin/rclone && \
     chmod +x /usr/bin/rclone && \
     rm -rf /tmp/rclone*
+    
+# Download warp-plus (bepass-org)
+RUN set -ex; \
+    if [ "$TARGETARCH" = "amd64" ]; then WARP_ARCH="amd64"; \
+    elif [ "$TARGETARCH" = "arm64" ]; then WARP_ARCH="arm64"; \
+    elif [ "$TARGETARCH" = "arm" ]; then WARP_ARCH="armv7"; \
+    else echo "Unsupported arch: $TARGETARCH" && exit 1; fi; \
+    WARP_TAG=$(curl -fsS https://api.github.com/repos/bepass-org/warp-plus/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'); \
+    echo "Downloading warp-plus ($WARP_ARCH) tag: $WARP_TAG"; \
+    curl -fsSL "https://github.com/bepass-org/warp-plus/releases/download/${WARP_TAG}/warp-plus-linux-${WARP_ARCH}" -o /usr/bin/warp-plus && \
+    chmod +x /usr/bin/warp-plus
 
 # Create directories
 RUN mkdir -p /app/web /app/server /data/alist /data/rclone /var/log/nginx /opt/host

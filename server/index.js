@@ -36,10 +36,13 @@ function authMiddleware(req, res, next) {
 // ========================
 // Rclone RC API Helper
 // ========================
-function rcloneRC(command, params = {}) {
+const RCLONE_PROXY_ADDR = process.env.RCLONE_PROXY_ADDR || 'http://127.0.0.1:5573';
+
+function rcloneRC(command, params = {}, useProxy = false) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(params);
-    const url = new URL(command, RCLONE_ADDR);
+    const rcloneAddrToUse = useProxy ? RCLONE_PROXY_ADDR : RCLONE_ADDR;
+    const url = new URL(command, rcloneAddrToUse);
     const options = {
       hostname: url.hostname,
       port: url.port,
@@ -98,7 +101,7 @@ function monitorJobCompletion(taskId, taskName, jobId) {
       return;
     }
     try {
-      const jobStatus = await rcloneRC('/job/status', { jobid: jobId });
+      const jobStatus = await rcloneRC('/job/status', { jobid: jobId }, useProxy);
       if (jobStatus && jobStatus.finished !== false) {
         clearInterval(timer);
         const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
@@ -540,8 +543,8 @@ async function executeTask(task) {
 
   const startTime = new Date().toISOString();
   try {
-    const result = await rcloneRC(endpoint, params);
-    return { time: startTime, status: 'success', jobId: result.jobid || null, message: '任务已启动' };
+    const result = await rcloneRC(endpoint, params, task.useProxy);
+    return { time: startTime, status: 'success', jobId: result.jobid || null, message: '任务已启动', useProxy: task.useProxy };
   } catch (err) {
     return { time: startTime, status: 'error', message: err.message };
   }
@@ -551,7 +554,7 @@ async function executeTask(task) {
 async function isTaskRunning(task) {
   if (!task.activeJobId) return false;
   try {
-    const jobStatus = await rcloneRC('/job/status', { jobid: task.activeJobId });
+    const jobStatus = await rcloneRC('/job/status', { jobid: task.activeJobId }, task.activeJobProxy === true);
     // 如果查询成功且 finished 字段为 false，说明该 job 仍在运行中
     if (jobStatus && jobStatus.finished === false) {
       return true;
@@ -585,6 +588,7 @@ function scheduleTask(task) {
     t.lastRun = record.time;
     t.lastStatus = record.status;
     t.activeJobId = record.jobId; // 保存启动的 jobId 以供下次判断
+    t.activeJobProxy = record.useProxy; // 保存它是否走了代理
     
     if (!t.history) t.history = [];
     t.history.unshift(record);
@@ -593,7 +597,7 @@ function scheduleTask(task) {
 
     // Monitor job completion for Bark notification
     if (record.jobId && t.notifyOnComplete !== false) {
-      monitorJobCompletion(t.id, t.name, record.jobId);
+      monitorJobCompletion(t.id, t.name, record.jobId, record.useProxy);
     }
   }, { scheduled: true, timezone: 'Asia/Shanghai' });
   cronJobs.set(task.id, job);
@@ -626,7 +630,7 @@ app.get('/api/tasks', authMiddleware, (req, res) => {
 });
 
 app.post('/api/tasks', authMiddleware, (req, res) => {
-  const { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, enabled, notifyOnComplete, advancedOptions } = req.body;
+  const { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, enabled, notifyOnComplete, advancedOptions, useProxy } = req.body;
   if (!name || !srcRemote || !dstRemote) {
     return res.status(400).json({ error: '任务名称、源存储和目标存储为必填项' });
   }
@@ -645,9 +649,11 @@ app.post('/api/tasks', authMiddleware, (req, res) => {
     enabled: enabled !== false,
     notifyOnComplete: notifyOnComplete !== false,
     advancedOptions: advancedOptions || {},
+    useProxy: useProxy === true,
     lastRun: null,
     lastStatus: null,
     activeJobId: null,
+    activeJobProxy: false,
     history: [],
     createdAt: new Date().toISOString(),
   };
@@ -663,7 +669,7 @@ app.put('/api/tasks/:id', authMiddleware, (req, res) => {
   const idx = tasks.findIndex(t => t.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: '任务不存在' });
 
-  const { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, enabled, notifyOnComplete, advancedOptions } = req.body;
+  const { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, enabled, notifyOnComplete, advancedOptions, useProxy } = req.body;
   if (cronExpr && !cron.validate(cronExpr)) {
     return res.status(400).json({ error: 'Cron 表达式格式无效' });
   }
@@ -679,6 +685,7 @@ app.put('/api/tasks/:id', authMiddleware, (req, res) => {
   if (enabled !== undefined) task.enabled = enabled;
   if (advancedOptions !== undefined) task.advancedOptions = advancedOptions;
   if (notifyOnComplete !== undefined) task.notifyOnComplete = notifyOnComplete;
+  if (useProxy !== undefined) task.useProxy = useProxy === true;
 
   saveTasks(tasks);
   scheduleTask(task);
@@ -712,6 +719,7 @@ app.post('/api/tasks/:id/run', authMiddleware, async (req, res) => {
   task.lastRun = record.time;
   task.lastStatus = record.status;
   task.activeJobId = record.jobId; // 保存启动的 jobId 以供下次判断
+  task.activeJobProxy = record.useProxy;
   
   if (!task.history) task.history = [];
   task.history.unshift(record);
@@ -720,7 +728,7 @@ app.post('/api/tasks/:id/run', authMiddleware, async (req, res) => {
 
   // Monitor job completion for Bark notification
   if (record.jobId && task.notifyOnComplete !== false) {
-    monitorJobCompletion(task.id, task.name, record.jobId);
+    monitorJobCompletion(task.id, task.name, record.jobId, record.useProxy);
   }
   res.json({ success: true, record });
 });
@@ -749,7 +757,7 @@ app.post('/api/tasks/:id/stop', authMiddleware, async (req, res) => {
 
   try {
     // Check if job is actually running
-    const jobStatus = await rcloneRC('/job/status', { jobid: task.activeJobId });
+    const jobStatus = await rcloneRC('/job/status', { jobid: task.activeJobId }, task.activeJobProxy === true);
     if (jobStatus && jobStatus.finished !== false) {
       task.activeJobId = null;
       saveTasks(tasks);
@@ -763,7 +771,7 @@ app.post('/api/tasks/:id/stop', authMiddleware, async (req, res) => {
   }
 
   try {
-    await rcloneRC('/job/stop', { jobid: task.activeJobId });
+    await rcloneRC('/job/stop', { jobid: task.activeJobId }, task.activeJobProxy === true);
     const stoppedJobId = task.activeJobId;
     task.activeJobId = null;
 

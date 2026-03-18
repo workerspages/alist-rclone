@@ -991,6 +991,8 @@ const App = {
         document.getElementById('task-opt-custom').value = '';
         // Reset notification toggle
         document.getElementById('task-notify').checked = true;
+        // Reset proxy toggle
+        document.getElementById('task-use-proxy').checked = false;
 
         if (editId) {
             document.getElementById('task-modal-title').textContent = '编辑任务';
@@ -1016,6 +1018,8 @@ const App = {
                     }
                     // Notification toggle
                     document.getElementById('task-notify').checked = task.notifyOnComplete !== false;
+                    // Proxy toggle
+                    document.getElementById('task-use-proxy').checked = task.useProxy === true;
                 }
             } catch (err) {
                 this.toast('加载任务详情失败', 'error');
@@ -1051,8 +1055,9 @@ const App = {
         // Collect advanced options
         const customArgsStr = document.getElementById('task-opt-custom').value.trim();
         const advancedOptions = App.parseRcloneArgs(customArgsStr);
+        const useProxy = document.getElementById('task-use-proxy').checked;
 
-        const body = { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, notifyOnComplete: document.getElementById('task-notify').checked, advancedOptions };
+        const body = { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, notifyOnComplete: document.getElementById('task-notify').checked, advancedOptions, useProxy };
 
         try {
             if (editId) {
