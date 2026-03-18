@@ -412,7 +412,7 @@ const App = {
                         row.innerHTML = `
                             <input type="text" data-param-key value="${this.escapeHtml(k)}" placeholder="参数名" class="param-key-input">
                             <input type="text" data-param-val value="${this.escapeHtml(v)}" placeholder="参数值" class="param-val-input">
-                            <button class="btn-icon" onclick="this.closest('.param-input-row').remove()" title="删除">✕</button>`;
+                            <button type="button" class="btn-icon" onclick="this.closest('.param-input-row').remove()" title="删除">✕</button>`;
                         genericRows.appendChild(row);
                     }
                 }
@@ -463,10 +463,10 @@ const App = {
                         <div class="param-input-row">
                             <input type="text" data-param-key placeholder="参数名" class="param-key-input">
                             <input type="text" data-param-val placeholder="参数值" class="param-val-input">
-                            <button class="btn-icon" onclick="this.closest('.param-input-row').remove()" title="删除">✕</button>
+                            <button type="button" class="btn-icon" onclick="this.closest('.param-input-row').remove()" title="删除">✕</button>
                         </div>
                     </div>
-                    <button class="btn btn-secondary btn-sm" onclick="App.addGenericParam()" style="margin-top:8px">+ 添加参数</button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="App.addGenericParam()" style="margin-top:8px">+ 添加参数</button>
                 </div>`;
         } else {
             container.innerHTML = '';
@@ -479,7 +479,7 @@ const App = {
         row.innerHTML = `
             <input type="text" data-param-key placeholder="参数名" class="param-key-input">
             <input type="text" data-param-val placeholder="参数值" class="param-val-input">
-            <button class="btn-icon" onclick="this.closest('.param-input-row').remove()" title="删除">✕</button>`;
+            <button type="button" class="btn-icon" onclick="this.closest('.param-input-row').remove()" title="删除">✕</button>`;
         document.getElementById('generic-param-rows').appendChild(row);
     },
 
@@ -946,6 +946,7 @@ const App = {
             </div>
             <div class="task-card-actions">
                 <button class="btn btn-primary btn-sm" onclick="App.runTask('${t.id}')" title="立即执行">▶ 执行</button>
+                <button class="btn btn-warning btn-sm" onclick="App.stopTask('${t.id}')" title="停止任务">⏹ 停止</button>
                 <button class="btn btn-secondary btn-sm" onclick="App.showTaskModal('${t.id}')" title="编辑">✏️ 编辑</button>
                 <button class="btn btn-secondary btn-sm" onclick="App.viewTaskHistory('${t.id}')" title="历史">
                     📋 历史${t.historyCount > 0 ? ' (' + t.historyCount + ')' : ''}
@@ -988,6 +989,8 @@ const App = {
         document.getElementById('task-edit-id').value = '';
         // Reset advanced
         document.getElementById('task-opt-custom').value = '';
+        // Reset notification toggle
+        document.getElementById('task-notify').checked = true;
 
         if (editId) {
             document.getElementById('task-modal-title').textContent = '编辑任务';
@@ -1011,6 +1014,8 @@ const App = {
                     if (task.advancedOptions) {
                         document.getElementById('task-opt-custom').value = App.stringifyRcloneArgs(task.advancedOptions);
                     }
+                    // Notification toggle
+                    document.getElementById('task-notify').checked = task.notifyOnComplete !== false;
                 }
             } catch (err) {
                 this.toast('加载任务详情失败', 'error');
@@ -1047,7 +1052,7 @@ const App = {
         const customArgsStr = document.getElementById('task-opt-custom').value.trim();
         const advancedOptions = App.parseRcloneArgs(customArgsStr);
 
-        const body = { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, advancedOptions };
+        const body = { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, notifyOnComplete: document.getElementById('task-notify').checked, advancedOptions };
 
         try {
             if (editId) {
@@ -1100,6 +1105,21 @@ const App = {
         }
     },
 
+    async stopTask(id) {
+        try {
+            this.toast('正在停止任务...', 'info');
+            const data = await this.api('POST', '/console-api/tasks/' + id + '/stop');
+            if (data.success) {
+                this.toast(data.message || '任务已停止', 'success');
+            } else {
+                this.toast(data.message || '停止失败', 'error');
+            }
+            this.loadTasksPage();
+        } catch (err) {
+            this.toast('停止失败: ' + err.message, 'error');
+        }
+    },
+
     async viewTaskHistory(id) {
         const list = document.getElementById('history-list');
         list.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>加载中...</p></div>';
@@ -1112,8 +1132,8 @@ const App = {
                 return;
             }
             list.innerHTML = history.map(h => {
-                const statusCls = h.status === 'success' ? 'history-success' : 'history-error';
-                const statusText = h.status === 'success' ? '✅ 成功' : '❌ 失败';
+                const statusCls = h.status === 'success' ? 'history-success' : h.status === 'stopped' ? 'history-stopped' : 'history-error';
+                const statusText = h.status === 'success' ? '✅ 成功' : h.status === 'stopped' ? '⏹ 已停止' : '❌ 失败';
                 return `<div class="history-item ${statusCls}">
                     <span class="history-time">${this.formatTime(h.time)}</span>
                     <span class="history-status">${statusText}</span>

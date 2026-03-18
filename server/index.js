@@ -17,6 +17,7 @@ const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('he
 const WEB_USERNAME = process.env.WEB_USERNAME || 'admin';
 const WEB_PASSWORD = process.env.WEB_PASSWORD || 'admin';
 const RCLONE_ADDR = process.env.RCLONE_ADDR || 'http://127.0.0.1:5572';
+const BARK_URL = process.env.BARK_URL || ''; // e.g. https://api.day.app/yourkey
 
 // ========================
 // Auth Middleware
@@ -60,6 +61,86 @@ function rcloneRC(command, params = {}) {
     req.write(data);
     req.end();
   });
+}
+
+// ========================
+// Bark Notification Helper
+// ========================
+function sendBarkNotification(title, body) {
+  if (!BARK_URL) return Promise.resolve();
+  const url = `${BARK_URL.replace(/\/+$/, '')}/${encodeURIComponent(title)}/${encodeURIComponent(body)}?icon=https://rclone.org/img/rclone-120x120.png&group=alist-rclone`;
+  const httpModule = url.startsWith('https') ? require('https') : http;
+  return new Promise((resolve) => {
+    httpModule.get(url, (resp) => {
+      let data = '';
+      resp.on('data', (chunk) => (data += chunk));
+      resp.on('end', () => {
+        console.log(`[Bark] Notification sent: ${title}`);
+        resolve(data);
+      });
+    }).on('error', (err) => {
+      console.error(`[Bark] Failed to send notification: ${err.message}`);
+      resolve();
+    });
+  });
+}
+
+function monitorJobCompletion(taskId, taskName, jobId) {
+  if (!BARK_URL || !jobId) return;
+  const startTime = Date.now();
+  const MAX_MONITOR_TIME = 24 * 60 * 60 * 1000; // 24 hours max
+  const CHECK_INTERVAL = 15000; // 15 seconds
+
+  const timer = setInterval(async () => {
+    // Safety: stop monitoring after 24 hours
+    if (Date.now() - startTime > MAX_MONITOR_TIME) {
+      clearInterval(timer);
+      return;
+    }
+    try {
+      const jobStatus = await rcloneRC('/job/status', { jobid: jobId });
+      if (jobStatus && jobStatus.finished !== false) {
+        clearInterval(timer);
+        const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
+        const success = !jobStatus.error;
+        const statusText = success ? '✅ 成功' : '❌ 失败';
+
+        // Update task history with completion info
+        const tasks = loadTasks();
+        const task = tasks.find(t => t.id === taskId);
+        if (task) {
+          task.activeJobId = null;
+          if (task.history && task.history.length > 0) {
+            const record = task.history.find(h => h.jobId === jobId);
+            if (record) {
+              record.status = success ? 'success' : 'error';
+              record.message = success ? `任务完成 (耗时 ${duration} 分钟)` : `任务失败: ${jobStatus.error}`;
+              record.completedAt = new Date().toISOString();
+              task.lastStatus = record.status;
+            }
+          }
+          saveTasks(tasks);
+        }
+
+        // Send Bark notification
+        const title = `任务${statusText}: ${taskName}`;
+        const body = success
+          ? `耗时 ${duration} 分钟`
+          : `错误: ${jobStatus.error || '未知错误'}`;
+        await sendBarkNotification(title, body);
+      }
+    } catch (err) {
+      // Job no longer exists (rclone restarted), stop monitoring
+      clearInterval(timer);
+      // Clear activeJobId
+      const tasks = loadTasks();
+      const task = tasks.find(t => t.id === taskId);
+      if (task) {
+        task.activeJobId = null;
+        saveTasks(tasks);
+      }
+    }
+  }, CHECK_INTERVAL);
 }
 
 // ========================
@@ -509,6 +590,11 @@ function scheduleTask(task) {
     t.history.unshift(record);
     if (t.history.length > 50) t.history = t.history.slice(0, 50);
     saveTasks(tasks);
+
+    // Monitor job completion for Bark notification
+    if (record.jobId && t.notifyOnComplete !== false) {
+      monitorJobCompletion(t.id, t.name, record.jobId);
+    }
   }, { scheduled: true, timezone: 'Asia/Shanghai' });
   cronJobs.set(task.id, job);
 }
@@ -540,7 +626,7 @@ app.get('/api/tasks', authMiddleware, (req, res) => {
 });
 
 app.post('/api/tasks', authMiddleware, (req, res) => {
-  const { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, enabled, advancedOptions } = req.body;
+  const { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, enabled, notifyOnComplete, advancedOptions } = req.body;
   if (!name || !srcRemote || !dstRemote) {
     return res.status(400).json({ error: '任务名称、源存储和目标存储为必填项' });
   }
@@ -557,6 +643,7 @@ app.post('/api/tasks', authMiddleware, (req, res) => {
     mode: mode || 'copy',
     cron: cronExpr || '',
     enabled: enabled !== false,
+    notifyOnComplete: notifyOnComplete !== false,
     advancedOptions: advancedOptions || {},
     lastRun: null,
     lastStatus: null,
@@ -576,7 +663,7 @@ app.put('/api/tasks/:id', authMiddleware, (req, res) => {
   const idx = tasks.findIndex(t => t.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: '任务不存在' });
 
-  const { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, enabled, advancedOptions } = req.body;
+  const { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, enabled, notifyOnComplete, advancedOptions } = req.body;
   if (cronExpr && !cron.validate(cronExpr)) {
     return res.status(400).json({ error: 'Cron 表达式格式无效' });
   }
@@ -591,6 +678,7 @@ app.put('/api/tasks/:id', authMiddleware, (req, res) => {
   if (cronExpr !== undefined) task.cron = cronExpr;
   if (enabled !== undefined) task.enabled = enabled;
   if (advancedOptions !== undefined) task.advancedOptions = advancedOptions;
+  if (notifyOnComplete !== undefined) task.notifyOnComplete = notifyOnComplete;
 
   saveTasks(tasks);
   scheduleTask(task);
@@ -629,6 +717,11 @@ app.post('/api/tasks/:id/run', authMiddleware, async (req, res) => {
   task.history.unshift(record);
   if (task.history.length > 50) task.history = task.history.slice(0, 50);
   saveTasks(tasks);
+
+  // Monitor job completion for Bark notification
+  if (record.jobId && task.notifyOnComplete !== false) {
+    monitorJobCompletion(task.id, task.name, record.jobId);
+  }
   res.json({ success: true, record });
 });
 
@@ -642,6 +735,58 @@ app.post('/api/tasks/:id/toggle', authMiddleware, (req, res) => {
   if (task.enabled) scheduleTask(task);
   else unscheduleTask(task.id);
   res.json({ success: true, enabled: task.enabled });
+});
+
+// Stop a running task
+app.post('/api/tasks/:id/stop', authMiddleware, async (req, res) => {
+  const tasks = loadTasks();
+  const task = tasks.find(t => t.id === req.params.id);
+  if (!task) return res.status(404).json({ error: '任务不存在' });
+
+  if (!task.activeJobId) {
+    return res.json({ success: false, message: '该任务当前没有正在执行的作业' });
+  }
+
+  try {
+    // Check if job is actually running
+    const jobStatus = await rcloneRC('/job/status', { jobid: task.activeJobId });
+    if (jobStatus && jobStatus.finished !== false) {
+      task.activeJobId = null;
+      saveTasks(tasks);
+      return res.json({ success: false, message: '该任务已经执行完毕' });
+    }
+  } catch (err) {
+    // Job doesn't exist anymore
+    task.activeJobId = null;
+    saveTasks(tasks);
+    return res.json({ success: false, message: '该任务的作业已不存在（可能已完成或 Rclone 已重启）' });
+  }
+
+  try {
+    await rcloneRC('/job/stop', { jobid: task.activeJobId });
+    const stoppedJobId = task.activeJobId;
+    task.activeJobId = null;
+
+    // Add a history record
+    if (!task.history) task.history = [];
+    task.history.unshift({
+      time: new Date().toISOString(),
+      status: 'stopped',
+      jobId: stoppedJobId,
+      message: '任务被手动停止',
+    });
+    if (task.history.length > 50) task.history = task.history.slice(0, 50);
+    saveTasks(tasks);
+
+    res.json({ success: true, message: `任务已停止 (Job ID: ${stoppedJobId})` });
+  } catch (err) {
+    res.status(500).json({ error: '停止任务失败: ' + err.message });
+  }
+});
+
+// Bark notification status
+app.get('/api/bark/status', authMiddleware, (req, res) => {
+  res.json({ configured: !!BARK_URL, url: BARK_URL ? BARK_URL.replace(/\/[^/]+$/, '/***') : '' });
 });
 
 app.get('/api/tasks/:id/history', authMiddleware, (req, res) => {

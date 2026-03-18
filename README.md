@@ -12,6 +12,8 @@
 - 🎛️ **统一 Web 控制台** — 在浏览器中管理所有配置和操作
 - 🔄 **高级文件传输** — 支持在不同云盘间直接互拷，支持并发、过滤等高级传输参数
 - ⚙️ **配置编辑功能** — 支持在图形界面上直接修改现有的 Rclone 远程存储配置参数
+- 🔔 **Bark 推送通知** — 定时任务执行完成后自动发送 Bark 推送通知（支持自建服务器）
+- ⏹ **任务停止功能** — 支持随时停止正在执行的传输任务，无需重启容器
 - 🔐 **安全登录** — 用户名密码认证保护
 - 📊 **状态监控与日志** — 实时查看服务运行状态及各组件日志
 - ☁️ **无状态环境支持** — 专为 PaaS 设计，支持通过 `SYNC_DEST` 自动同步全站状态到 S3/WebDAV，彻底解决容器重启数据丢失问题
@@ -96,6 +98,7 @@ docker compose up -d
 | `SYNC_DEST` | - | ❌ | **[无状态 PaaS 专用]** 外部配置备份地址（如 S3 或 WebDAV）。配置后每次启动自动拉取，并每 5 分钟自动备份 `/data` 目录 |
 | `CUSTOM_CA_CERT_PATH` | - | ❌ | 自定义 CA 证书的容器内路径（可为文件或目录），用于信任私有/自签证书 |
 | `SWAP_SIZE_MB` | - | ❌ | 交换内存（虚拟内存）大小，单位为MB。例如 `512`表示分配512MB。开启此功能可能需要开启容器特权模式 |
+| `BARK_URL` | - | ❌ | Bark 推送通知服务器地址（如 `https://api.day.app/yourkey`）。配置后定时任务执行完成时会自动发送推送通知 |
 
 > ⚠️ **安全提示**：首次部署时请务必修改 `WEB_PASSWORD` 和 `ALIST_ADMIN_PASSWORD`，不要使用默认值。
 
@@ -151,7 +154,7 @@ SYNC_DEST=":webdav,url='https://dav.jianguoyun.com/dav/',user='你的账号',pas
 
 1. **仪表板** — 查看 Alist 和 Rclone 运行状态、运行时间、远程存储数量
 2. **Rclone 配置** — 添加/修改/测试/删除远程存储，包括强大的实时 **连通性探测功能**
-3. **定时任务** — 支持在多个 Rclone 配置间进行定时和手动文件复制、移动和同步操作。包含高级参数（如 `--transfers`并发数，`--exclude`排除等）
+3. **定时任务** — 支持在多个 Rclone 配置间进行定时和手动文件复制、移动和同步操作。包含高级参数、任务停止功能和 Bark 完成通知
 4. **Alist 文件管理** — 内嵌 Alist 管理主打界面，一站式管理所有文件
 5. **日志** — 在线查看 Alist、Rclone、Nginx、API 的运行日志
 
@@ -180,7 +183,9 @@ Content-Type: application/json
 * `GET /console-api/status` : 获取容器各服务运行状态
 * `GET /console-api/rclone/remotes` : 枚举所有网盘配置
 * `POST /console-api/tasks/{task_id}/run` : 立即触发执行某个转移任务
+* `POST /console-api/tasks/{task_id}/stop` : 停止正在执行的任务
 * `POST /console-api/service/restart` : 重启 Alist/Rclone 服务 (`{"service": "alist"}`)
+* `GET /console-api/bark/status` : 查询 Bark 通知配置状态
 *(如果需要更详尽的接口，请查阅容器内的 `server/index.js` 路由定义)*
 
 ---

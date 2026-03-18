@@ -272,6 +272,16 @@ body {
     background: rgba(239, 68, 68, 0.25);
 }
 
+.btn-warning {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.btn-warning:hover {
+    background: rgba(245, 158, 11, 0.25);
+}
+
 .btn-full {
     width: 100%;
     justify-content: center;
@@ -1219,6 +1229,10 @@ body {
 
 .history-item.history-error {
     border-left: 3px solid var(--danger);
+}
+
+.history-item.history-stopped {
+    border-left: 3px solid var(--warning);
 }
 
 .history-time {
