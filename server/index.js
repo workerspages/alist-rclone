@@ -88,7 +88,7 @@ function sendBarkNotification(title, body) {
   });
 }
 
-function monitorJobCompletion(taskId, taskName, jobId) {
+function monitorJobCompletion(taskId, taskName, jobId, useProxy = false) {
   if (!BARK_URL || !jobId) return;
   const startTime = Date.now();
   const MAX_MONITOR_TIME = 24 * 60 * 60 * 1000; // 24 hours max
@@ -330,10 +330,18 @@ app.get('/api/logs/:service', authMiddleware, (req, res) => {
   };
   try {
     const lines = parseInt(req.query.lines, 10) || 100;
-    const log = execSync(`tail -n ${lines} ${logMap[service]} 2>/dev/null || echo "No logs available"`, {
-      encoding: 'utf-8',
-      timeout: 5000,
-    });
+    let log = '';
+    if (service === 'rclone') {
+      log = execSync(`cat /var/log/rclone.log /var/log/rclone-proxy.log 2>/dev/null | sort | tail -n ${lines} || echo "No logs available"`, {
+        encoding: 'utf-8',
+        timeout: 5000,
+      });
+    } else {
+      log = execSync(`tail -n ${lines} ${logMap[service]} 2>/dev/null || echo "No logs available"`, {
+        encoding: 'utf-8',
+        timeout: 5000,
+      });
+    }
     res.json({ service, log });
   } catch {
     res.json({ service, log: 'No logs available' });
@@ -452,8 +460,32 @@ app.post('/api/rclone/move', authMiddleware, async (req, res) => {
 // Get transfer stats
 app.get('/api/rclone/stats', authMiddleware, async (req, res) => {
   try {
-    const result = await rcloneRC('/core/stats');
-    res.json(result);
+    const [statsNormal, statsProxy] = await Promise.all([
+      rcloneRC('/core/stats', {}).catch(() => null),
+      rcloneRC('/core/stats', {}, true).catch(() => null)
+    ]);
+
+    if (!statsNormal && !statsProxy) {
+      throw new Error('Both rclone instances offline');
+    }
+
+    const mergeStats = (s1, s2) => {
+      if (!s1) return s2;
+      if (!s2) return s1;
+      return {
+        bytes: (s1.bytes || 0) + (s2.bytes || 0),
+        speed: (s1.speed || 0) + (s2.speed || 0),
+        errors: (s1.errors || 0) + (s2.errors || 0),
+        checks: (s1.checks || 0) + (s2.checks || 0),
+        transfers: (s1.transfers || 0) + (s2.transfers || 0),
+        totalBytes: (s1.totalBytes || 0) + (s2.totalBytes || 0),
+        elapsedTime: Math.max(s1.elapsedTime || 0, s2.elapsedTime || 0),
+        eta: Math.max(s1.eta || 0, s2.eta || 0),
+        transferring: [...(s1.transferring || []), ...(s2.transferring || [])]
+      };
+    };
+
+    res.json(mergeStats(statsNormal, statsProxy));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
