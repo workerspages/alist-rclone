@@ -197,7 +197,11 @@ const App = {
             this.logout();
             throw new Error('Unauthorized');
         }
-        return res.json();
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data.error || `HTTP ${res.status}`);
+        }
+        return data;
     },
 
     // ========================
@@ -748,7 +752,7 @@ const App = {
             // Keep viewer scrolled to bottom
             const isScrolledToBottom = viewer.scrollHeight - viewer.clientHeight <= viewer.scrollTop + 50;
             
-            viewer.innerHTML = output || '暂无数据';
+            viewer.innerHTML = output.trim() ? output : '<span class="term-color-yellow">暂无数据 — Rclone 可能未运行或 API 无响应</span>';
             
             if (isScrolledToBottom) {
                 viewer.scrollTop = viewer.scrollHeight;
@@ -766,8 +770,8 @@ const App = {
         try {
             const data = await this.api('GET', `/console-api/logs/${service}?lines=200`);
             viewer.textContent = data.log || '无日志';
-        } catch {
-            viewer.textContent = '加载日志失败';
+        } catch (err) {
+            viewer.textContent = '加载日志失败: ' + (err.message || '未知错误');
         }
     },
 
