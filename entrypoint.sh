@@ -42,7 +42,7 @@ if [ -n "$SYNC_DEST" ]; then
     done
 
     # 致命错误保护（熔断机制）：如果30秒后依然无法拉取，强制停止容器！
-    # 绝不让程序带病启动，防止触发 5 分钟后的 autosync 把网盘备份清空。
+    # 绝不让程序带病启动，防止触发定时的 autosync 把网盘备份清空。
     if [ "$RESTORE_OK" != true ]; then
         echo "=========================================================================="
         echo "[FATAL ERROR] Failed to restore data from SYNC_DEST after 30 seconds!"

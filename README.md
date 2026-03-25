@@ -95,7 +95,8 @@ docker compose up -d
 | `ALIST_ADMIN_USERNAME` | `admin` | ✅ | Alist 管理员用户名 |
 | `ALIST_ADMIN_PASSWORD` | `admin` | ⚠️ | Alist 管理员密码，**强烈建议修改** |
 | `TZ` | `Asia/Shanghai` | ✅ | 容器时区 |
-| `SYNC_DEST` | - | ❌ | **[无状态 PaaS 专用]** 外部配置备份地址（如 S3 或 WebDAV）。配置后每次启动自动拉取，并每 5 分钟自动备份 `/data` 目录 |
+| `SYNC_DEST` | - | ❌ | **[无状态 PaaS 专用]** 外部配置备份地址（如 S3 或 WebDAV）。配置后每次启动自动拉取，并依 `SYNC_INTERVAL` 自动备份 `/data` 目录 |
+| `SYNC_INTERVAL` | `5` | ❌ | **[无状态 PaaS 专用]** 自动同步外部存储的时间间隔（分钟）。默认为 `5` |
 | `CUSTOM_CA_CERT_PATH` | - | ❌ | 自定义 CA 证书的容器内路径（可为文件或目录），用于信任私有/自签证书 |
 | `SWAP_SIZE_MB` | - | ❌ | 交换内存（虚拟内存）大小，单位为MB。例如 `512`表示分配512MB。开启此功能可能需要开启容器特权模式 |
 | `BARK_URL` | - | ❌ | Bark 推送通知服务器地址（如 `https://api.day.app/yourkey`）。配置后定时任务执行完成时会自动发送推送通知 |
@@ -108,7 +109,7 @@ docker compose up -d
 
 在 Koyeb、Render 等没有本地持久化存储（Volume）的 PaaS 平台上，容器重启会导致所有应用数据和配置丢失。
 
-为了解决此问题，您只需配置 `SYNC_DEST` 环境变量，容器就会在启动时**自动从外部存储拉取完整环境**，并在运行期间**每 5 分钟自动将最新状态备份回外部存储**（自动排除不必要的缓存和临时文件）。此方案将同时备份 Alist 数据库与 Rclone 配置。
+为了解决此问题，您只需配置 `SYNC_DEST` 环境变量，容器就会在启动时**自动从外部存储拉取完整环境**，并在运行期间**按 `SYNC_INTERVAL` 设定的分钟数（默认 5）自动将最新状态备份回外部存储**（自动排除不必要的缓存和临时文件）。此方案将同时备份 Alist 数据库与 Rclone 配置。
 
 ### 1. 备份到 S3 存储桶（推荐，以 Cloudflare R2 为例）
 
