@@ -424,9 +424,10 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    height: 100vh;
     position: relative;
     z-index: 1;
+    overflow: hidden;
 }
 
 .content-header {
@@ -435,6 +436,7 @@ body {
     justify-content: space-between;
     padding: 0 32px;
     height: var(--header-height);
+    flex-shrink: 0;
     border-bottom: 1px solid var(--border-color);
     background: var(--bg-glass);
     backdrop-filter: blur(20px);
@@ -474,7 +476,7 @@ body {
 .page-container {
     flex: 1;
     overflow-y: auto;
-    height: calc(100vh - var(--header-height));
+    min-height: 0;
 }
 
 .page {
