@@ -805,6 +805,7 @@ const App = {
         if (!argStr) return {};
         const config = {};
         const filter = {};
+        const order = []; // Track original parameter order
         const filterFlags = ['max-size', 'min-size', 'max-age', 'min-age', 'include', 'exclude', 'filter'];
         
         const matches = argStr.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
@@ -836,11 +837,15 @@ const App = {
                         const ruleKey = pascalKey + 'Rule';
                         if (!filter[ruleKey]) filter[ruleKey] = [];
                         filter[ruleKey].push(value);
+                        // Record order entry with index for array-type filter rules
+                        order.push({ section: 'filter', key: ruleKey, index: filter[ruleKey].length - 1 });
                     } else {
                         filter[pascalKey] = value;
+                        order.push({ section: 'filter', key: pascalKey });
                     }
                 } else {
                     config[pascalKey] = value;
+                    order.push({ section: 'config', key: pascalKey });
                 }
             }
         }
@@ -848,6 +853,7 @@ const App = {
         const res = {};
         if (Object.keys(config).length) res._config = config;
         if (Object.keys(filter).length) res._filter = filter;
+        if (order.length) res._order = order;
         return res;
     },
 
@@ -857,17 +863,46 @@ const App = {
         const toKebab = (str) => str.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`).replace(/^-/, '');
         
         const cfg = advancedOptions._config || {};
-        for (const [k, v] of Object.entries(cfg)) {
-            const flag = '--' + toKebab(k);
-            if (v === true) {
-                args.push(flag);
-            } else {
-                const valStr = String(v).includes(' ') ? `"${v}"` : String(v);
-                args.push(`${flag} ${valStr}`);
+        const flt = advancedOptions._filter || {};
+        const order = advancedOptions._order;
+        
+        const formatValue = (flag, v) => {
+            if (v === true) return flag;
+            const valStr = String(v).includes(' ') ? `"${v}"` : String(v);
+            return `${flag} ${valStr}`;
+        };
+        
+        // If _order exists, output parameters in recorded order
+        if (order && Array.isArray(order) && order.length > 0) {
+            for (const entry of order) {
+                if (entry.section === 'config') {
+                    const v = cfg[entry.key];
+                    if (v !== undefined) {
+                        args.push(formatValue('--' + toKebab(entry.key), v));
+                    }
+                } else if (entry.section === 'filter') {
+                    const v = flt[entry.key];
+                    if (v === undefined) continue;
+                    if (entry.key.endsWith('Rule') && Array.isArray(v)) {
+                        const flagName = toKebab(entry.key.replace('Rule', ''));
+                        const idx = entry.index !== undefined ? entry.index : 0;
+                        if (idx < v.length) {
+                            const valStr = v[idx].includes(' ') ? `"${v[idx]}"` : v[idx];
+                            args.push(`--${flagName} ${valStr}`);
+                        }
+                    } else {
+                        args.push(formatValue('--' + toKebab(entry.key), v));
+                    }
+                }
             }
+            return args.join(' ');
         }
         
-        const flt = advancedOptions._filter || {};
+        // Fallback: no _order present (legacy data), output config first then filter
+        for (const [k, v] of Object.entries(cfg)) {
+            args.push(formatValue('--' + toKebab(k), v));
+        }
+        
         for (const [k, v] of Object.entries(flt)) {
             if (k.endsWith('Rule') && Array.isArray(v)) {
                 const flagName = toKebab(k.replace('Rule', ''));
@@ -876,9 +911,7 @@ const App = {
                     args.push(`--${flagName} ${valStr}`);
                 });
             } else {
-                const flag = '--' + toKebab(k);
-                const valStr = String(v).includes(' ') ? `"${v}"` : String(v);
-                args.push(`${flag} ${valStr}`);
+                args.push(formatValue('--' + toKebab(k), v));
             }
         }
         
