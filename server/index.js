@@ -401,6 +401,36 @@ app.post('/api/rclone/ls', authMiddleware, async (req, res) => {
   }
 });
 
+// Create directory in a remote
+app.post('/api/rclone/mkdir', authMiddleware, async (req, res) => {
+  try {
+    const { fs: remotePath, remote: dirPath } = req.body;
+    if (!remotePath) return res.status(400).json({ error: 'fs is required' });
+    const result = await rcloneRC('/operations/mkdir', { fs: remotePath, remote: dirPath || '' });
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create directory: ' + err.message });
+  }
+});
+
+// Delete file or directory in a remote
+app.post('/api/rclone/delete', authMiddleware, async (req, res) => {
+  try {
+    const { fs: remotePath, remote: filePath, isDir } = req.body;
+    if (!remotePath) return res.status(400).json({ error: 'fs is required' });
+    if (isDir) {
+      // Purge removes the directory and all its contents
+      const result = await rcloneRC('/operations/purge', { fs: remotePath, remote: filePath || '' });
+      res.json({ success: true, result });
+    } else {
+      const result = await rcloneRC('/operations/deletefile', { fs: remotePath, remote: filePath || '' });
+      res.json({ success: true, result });
+    }
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete: ' + err.message });
+  }
+});
+
 // Copy files between remotes
 app.post('/api/rclone/copy', authMiddleware, async (req, res) => {
   try {

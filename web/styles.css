@@ -1418,6 +1418,182 @@ body {
     flex-shrink: 0;
 }
 
+/* ========================================
+   File Manager (Remote Storage Browser)
+   ======================================== */
+.fm-modal-size {
+    max-width: 800px;
+    width: 95vw;
+}
+
+.fm-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.fm-toolbar-left {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.fm-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 8px 20px;
+    background: rgba(0, 0, 0, 0.2);
+    font-size: 0.8rem;
+    font-family: 'SF Mono', monospace;
+    color: var(--text-muted);
+    overflow-x: auto;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.fm-crumb-item {
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+.fm-crumb-link {
+    color: var(--accent-hover);
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.fm-crumb-link:hover {
+    background: rgba(99, 102, 241, 0.15);
+}
+
+.fm-crumb-current {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.fm-crumb-sep {
+    color: var(--text-muted);
+    opacity: 0.5;
+    margin: 0 1px;
+}
+
+.fm-body {
+    padding: 0 !important;
+}
+
+.fm-file-list {
+    max-height: 55vh;
+    overflow-y: auto;
+}
+
+.fm-file-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.fm-file-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.fm-file-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+.fm-file-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.fm-file-row {
+    display: grid;
+    grid-template-columns: 28px 1fr 80px 140px 36px;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    font-size: 0.84rem;
+    color: var(--text-secondary);
+    transition: background 0.15s ease;
+}
+
+.fm-file-row:last-child {
+    border-bottom: none;
+}
+
+.fm-file-row:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.fm-file-row.fm-dir {
+    cursor: pointer;
+    color: var(--text-primary);
+}
+
+.fm-file-row.fm-dir:hover {
+    background: rgba(99, 102, 241, 0.08);
+}
+
+.fm-file-icon {
+    font-size: 1rem;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.fm-file-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fm-file-size {
+    color: var(--text-muted);
+    font-size: 0.73rem;
+    font-family: 'SF Mono', monospace;
+    text-align: right;
+}
+
+.fm-file-time {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-family: 'SF Mono', monospace;
+    text-align: right;
+}
+
+.fm-file-actions {
+    display: flex;
+    justify-content: center;
+}
+
+.fm-delete-btn {
+    opacity: 0;
+    transition: opacity 0.15s ease, color 0.15s ease;
+    color: var(--text-muted) !important;
+}
+
+.fm-file-row:hover .fm-delete-btn {
+    opacity: 1;
+}
+
+.fm-delete-btn:hover {
+    color: var(--danger) !important;
+}
+
+@media (max-width: 768px) {
+    .fm-file-row {
+        grid-template-columns: 28px 1fr 36px;
+    }
+    .fm-file-size,
+    .fm-file-time {
+        display: none;
+    }
+    .fm-toolbar-left {
+        flex-wrap: wrap;
+    }
+}
+
 /* Transfer Stats */
 .stats-summary {
     display: flex;

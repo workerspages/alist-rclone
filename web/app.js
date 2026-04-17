@@ -282,6 +282,9 @@ const App = {
                                 <button class="btn-icon" onclick="App.testRemote('${this.escapeJsArgs(r.name)}')" title="测试连接">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
                                 </button>
+                                <button class="btn-icon" onclick="App.openFileManager('${this.escapeJsArgs(r.name)}')" title="浏览文件">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                                </button>
                                 <button class="btn-icon" onclick="App.editRemote('${this.escapeJsArgs(r.name)}')" title="编辑">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                                 </button>
@@ -1254,6 +1257,137 @@ const App = {
         const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    },
+
+    // ========================
+    // File Manager (Remote Storage Browser)
+    // ========================
+    fmRemoteName: '',
+    fmCurrentPath: '/',
+
+    openFileManager(remoteName) {
+        this.fmRemoteName = remoteName;
+        this.fmCurrentPath = '/';
+        document.getElementById('fm-modal-title').textContent = '文件管理器 — ' + remoteName;
+        document.getElementById('fm-modal').classList.add('active');
+        this.loadFmDir();
+    },
+
+    closeFmModal() {
+        document.getElementById('fm-modal').classList.remove('active');
+    },
+
+    fmBuildBreadcrumb() {
+        const container = document.getElementById('fm-breadcrumb');
+        const parts = this.fmCurrentPath.replace(/^\/+/, '').replace(/\/+$/, '').split('/').filter(Boolean);
+        let html = `<span class="fm-crumb-item fm-crumb-link" onclick="App.fmNavigateTo('/')">${this.escapeHtml(this.fmRemoteName)}:</span>`;
+        let accumulated = '';
+        parts.forEach((part, idx) => {
+            accumulated += '/' + part;
+            const path = accumulated;
+            html += `<span class="fm-crumb-sep">/</span>`;
+            if (idx === parts.length - 1) {
+                html += `<span class="fm-crumb-item fm-crumb-current">${this.escapeHtml(part)}</span>`;
+            } else {
+                html += `<span class="fm-crumb-item fm-crumb-link" onclick="App.fmNavigateTo('${this.escapeJsArgs(path)}')">${this.escapeHtml(part)}</span>`;
+            }
+        });
+        container.innerHTML = html;
+    },
+
+    async loadFmDir() {
+        const list = document.getElementById('fm-file-list');
+        list.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>加载中...</p></div>';
+        this.fmBuildBreadcrumb();
+        try {
+            const fsStr = this.fmRemoteName + ':';
+            const remotePath = this.fmCurrentPath.replace(/^\/+/, '');
+            const data = await this.api('POST', '/console-api/rclone/ls', { fs: fsStr, path: remotePath });
+            const items = data.list || [];
+            if (items.length === 0) {
+                list.innerHTML = '<div class="empty-state"><p>📂 空目录</p></div>';
+                return;
+            }
+            const dirs = items.filter(i => i.IsDir).sort((a, b) => a.Name.localeCompare(b.Name));
+            const files = items.filter(i => !i.IsDir).sort((a, b) => a.Name.localeCompare(b.Name));
+            list.innerHTML = [...dirs, ...files].map(item => {
+                const icon = item.IsDir ? '📁' : '📄';
+                const size = item.IsDir ? '-' : this.formatSize(item.Size);
+                const modTime = item.ModTime ? this.fmFormatTime(item.ModTime) : '-';
+                const itemPath = item.Path || item.Name;
+                const dirOnClick = item.IsDir ? `onclick="App.fmNavigateTo('/${this.escapeJsArgs(itemPath)}')"` : '';
+                const cls = item.IsDir ? 'fm-file-row fm-dir' : 'fm-file-row';
+                return `<div class="${cls}" ${dirOnClick}>
+                    <span class="fm-file-icon">${icon}</span>
+                    <span class="fm-file-name" title="${this.escapeHtml(item.Name)}">${this.escapeHtml(item.Name)}</span>
+                    <span class="fm-file-size">${size}</span>
+                    <span class="fm-file-time">${modTime}</span>
+                    <span class="fm-file-actions">
+                        <button class="btn-icon fm-delete-btn" onclick="event.stopPropagation(); App.fmDeleteItem('${this.escapeJsArgs(itemPath)}', '${this.escapeJsArgs(item.Name)}', ${item.IsDir})" title="删除">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        </button>
+                    </span>
+                </div>`;
+            }).join('');
+        } catch (err) {
+            list.innerHTML = `<div class="empty-state"><p>加载失败: ${this.escapeHtml(err.message)}</p></div>`;
+        }
+    },
+
+    fmFormatTime(isoStr) {
+        try {
+            const d = new Date(isoStr);
+            return d.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+        } catch { return isoStr; }
+    },
+
+    fmNavigateTo(path) {
+        this.fmCurrentPath = path || '/';
+        this.loadFmDir();
+    },
+
+    fmGoUp() {
+        const parts = this.fmCurrentPath.replace(/\/+$/, '').split('/');
+        parts.pop();
+        this.fmCurrentPath = parts.join('/') || '/';
+        this.loadFmDir();
+    },
+
+    fmRefresh() {
+        this.loadFmDir();
+    },
+
+    async fmCreateDir() {
+        const name = prompt('请输入新目录名称:');
+        if (!name || !name.trim()) return;
+        const dirName = name.trim();
+        // Validate directory name
+        if (/[\\/:*?"<>|]/.test(dirName)) {
+            this.toast('目录名包含无效字符', 'error');
+            return;
+        }
+        try {
+            const fsStr = this.fmRemoteName + ':';
+            const remotePath = (this.fmCurrentPath.replace(/^\/+/, '').replace(/\/+$/, '') + '/' + dirName).replace(/^\/+/, '');
+            await this.api('POST', '/console-api/rclone/mkdir', { fs: fsStr, remote: remotePath });
+            this.toast(`目录 "${dirName}" 创建成功`, 'success');
+            this.loadFmDir();
+        } catch (err) {
+            this.toast('创建目录失败: ' + err.message, 'error');
+        }
+    },
+
+    async fmDeleteItem(path, name, isDir) {
+        const typeText = isDir ? '目录' : '文件';
+        if (!confirm(`确定删除${typeText} "${name}" 吗？${isDir ? '\n⚠️ 这将删除该目录及其所有内容！' : ''}`)) return;
+        try {
+            const fsStr = this.fmRemoteName + ':';
+            await this.api('POST', '/console-api/rclone/delete', { fs: fsStr, remote: path, isDir });
+            this.toast(`${typeText} "${name}" 已删除`, 'success');
+            this.loadFmDir();
+        } catch (err) {
+            this.toast('删除失败: ' + err.message, 'error');
+        }
     },
 };
 
