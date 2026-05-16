@@ -11,12 +11,15 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - SWAP_SIZE_MB=512
+      
       # Web 控制台登录凭据
       - WEB_USERNAME=admin
       - WEB_PASSWORD=admin
       # Alist 管理员凭据
+      
       - ALIST_ADMIN_USERNAME=admin
       - ALIST_ADMIN_PASSWORD=admin
+      
       # 高级变量 (PaaS 持久化与通知)
       - SYNC_DEST=SYNC_DEST=":s3,provider='Cloudflare',region='auto',endpoint='https://xxx.r2.cloudflarestorage.com',access_key_id='你的AK',secret_access_key='你的SK':/存储桶名称/"
       - SYNC_INTERVAL=120
