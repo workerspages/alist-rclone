@@ -35,6 +35,8 @@ docker run -d \
   -e WEB_PASSWORD=your_password \
   -e ALIST_ADMIN_PASSWORD=your_alist_password \
   -e TZ=Asia/Shanghai \
+  -e SYNC_DEST="你的SYNC_DEST_可选" \
+  -e SYNC_INTERVAL="5" \
   ghcr.io/workerspages/alist-rclone:main
 
 ```
@@ -65,6 +67,10 @@ services:
       # Alist 管理员凭据
       - ALIST_ADMIN_USERNAME=admin
       - ALIST_ADMIN_PASSWORD=admin
+      # 高级变量 (PaaS 持久化与通知)
+      - SYNC_DEST=${SYNC_DEST:-}
+      - SYNC_INTERVAL=${SYNC_INTERVAL:-5}
+      - BARK_URL=${BARK_URL:-}
 
 ```
 
