@@ -18,6 +18,6 @@ services:
       - ALIST_ADMIN_USERNAME=admin
       - ALIST_ADMIN_PASSWORD=admin
       # 高级变量 (PaaS 持久化与通知)
-      - SYNC_DEST=${SYNC_DEST:-}
-      - SYNC_INTERVAL=${SYNC_INTERVAL:-5}
-      - BARK_URL=${BARK_URL:-}
+      - SYNC_DEST=SYNC_DEST=":s3,provider='Cloudflare',region='auto',endpoint='https://xxx.r2.cloudflarestorage.com',access_key_id='你的AK',secret_access_key='你的SK':/存储桶名称/"
+      - SYNC_INTERVAL=120
+      - BARK_URL=https://api.day.app/yourkey
