@@ -37,7 +37,7 @@ docker run -d \
   -e TZ=Asia/Shanghai \
   -e SYNC_DEST="你的SYNC_DEST_可选" \
   -e SYNC_INTERVAL="5" \
-  ghcr.io/workerspages/alist-rclone:main
+  ghcr.io/workerspages/alist-rclone:latest
 
 ```
 
@@ -101,7 +101,7 @@ docker compose up -d
 
 大多数 PaaS 平台（如 Railway、Render、Zeabur、Koyeb 等）支持直接使用 Docker 镜像部署：
 
-1. **镜像地址**：`ghcr.io/workerspages/alist-rclone:main`
+1. **镜像地址**：`ghcr.io/workerspages/alist-rclone:latest`
 2. **端口**：设置为 `8080`
 3. **环境变量**：按下方表格配置
 4. **持久化存储**：如果平台无持久化本地存储，请务必参考下方的 `SYNC_DEST` 无状态持久化方案。
