@@ -119,24 +119,27 @@ docker compose up -d
 
 ### 1. 备份到 S3 存储桶（推荐，以 Cloudflare R2 为例）
 
-添加环境变量：
+添加环境变量，使用标准的 `s3://` 网址格式：
 
 ```text
-SYNC_DEST=":s3,provider='Cloudflare',region='auto',endpoint='https://xxx.r2.cloudflarestorage.com',access_key_id='你的AK',secret_access_key='你的SK':/存储桶名称/"
-
+SYNC_DEST="s3://<你的AK>:<你的SK>@<你的Endpoint地址>/<存储桶名称>"
 ```
+*例如：`s3://1b4...:61c...@xxx.r2.cloudflarestorage.com/my-backup`*
+
+*(容器启动时会自动识别并转换为底层所需的高级连接格式，无需担心引号或逗号转义问题)*
 
 ### 2. 备份到 WebDAV（以坚果云为例）
 
-⚠️ **极度重要提示**：WebDAV 的密码 (`pass`) **绝对不能填写明文**！必须使用 Rclone 进行混淆（Obscured）。
-
-1. 在本地电脑或任意终端执行：`rclone obscure "你的坚果云应用密码"` （会输出一段类似 `v2x...` 的密文）。
-2. 将获取到的密文填入环境变量（注意 `vendor='other'` 参数也是必须的）：
+添加环境变量，使用标准的 `webdav://` 网址格式：
 
 ```text
-SYNC_DEST=":webdav,url='https://dav.jianguoyun.com/dav/',user='你的账号',pass='你的应用密码':/alist-rclone"
-
+SYNC_DEST="webdav://<你的账号>:<你的应用密码>@<WebDAV地址>"
 ```
+*例如：`webdav://admin:pass123@dav.jianguoyun.com/dav/alist-backup`*
+
+*(注意：容器会在启动时自动为您调用 `rclone obscure` 对明文密码进行加密混淆，您**直接填入真实密码**即可，系统绝不会在日志中泄露)*
+
+> **高级用法**：如果您依然需要使用复杂的底层参数，`SYNC_DEST` 依然完全向后兼容 Rclone 原生高级连接字符串语法（例如 `:s3,provider=...:`）。
 
 > **注意**：如果您使用的是常规 VPS 或支持本地硬盘挂载的环境，完全可以忽略此变量，系统默认依靠本地 `/data` 目录保存数据。
 

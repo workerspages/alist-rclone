@@ -23,6 +23,37 @@ if [ -n "$TZ" ]; then
     echo "$TZ" > /etc/timezone
 fi
 
+# ---- Parse SYNC_DEST URL formats ----
+if [ -n "$SYNC_DEST" ]; then
+    if [[ "$SYNC_DEST" =~ ^s3://([^:]+):([^@]+)@([^/]+)/(.*)$ ]]; then
+        S3_AK="${BASH_REMATCH[1]}"
+        S3_SK="${BASH_REMATCH[2]}"
+        S3_ENDPOINT="${BASH_REMATCH[3]}"
+        S3_BUCKET="${BASH_REMATCH[4]}"
+        S3_PROVIDER="Other"
+        if [[ "$S3_ENDPOINT" == *"cloudflarestorage"* ]]; then
+            S3_PROVIDER="Cloudflare"
+        fi
+        if [[ ! "$S3_ENDPOINT" =~ ^https?:// ]]; then
+            S3_ENDPOINT="https://$S3_ENDPOINT"
+        fi
+        echo "[Init] Converted s3:// URL to Rclone connection string."
+        export SYNC_DEST=":s3,provider=\"$S3_PROVIDER\",endpoint=\"$S3_ENDPOINT\",access_key_id=\"$S3_AK\",secret_access_key=\"$S3_SK\":$S3_BUCKET"
+    elif [[ "$SYNC_DEST" =~ ^(webdav|dav)://([^:]+):([^@]+)@(.*)$ ]]; then
+        DAV_USER="${BASH_REMATCH[2]}"
+        DAV_PASS="${BASH_REMATCH[3]}"
+        DAV_PATH="${BASH_REMATCH[4]}"
+        if [[ ! "$DAV_PATH" =~ ^https?:// ]]; then
+            DAV_ENDPOINT="https://$DAV_PATH"
+        else
+            DAV_ENDPOINT="$DAV_PATH"
+        fi
+        OBSCURED_PASS=$(/usr/bin/rclone obscure "$DAV_PASS")
+        echo "[Init] Converted webdav:// URL to Rclone connection string."
+        export SYNC_DEST=":webdav,vendor=\"other\",url=\"$DAV_ENDPOINT\",user=\"$DAV_USER\",pass=\"$OBSCURED_PASS\":"
+    fi
+fi
+
 # ---- Print Environment Settings ----
 echo "[Init] Current AutoSync Settings:"
 if [ -n "$SYNC_DEST" ]; then
