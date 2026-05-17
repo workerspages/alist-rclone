@@ -23,6 +23,17 @@ if [ -n "$TZ" ]; then
     echo "$TZ" > /etc/timezone
 fi
 
+# ---- Print Environment Settings ----
+echo "[Init] Current AutoSync Settings:"
+if [ -n "$SYNC_DEST" ]; then
+    # Protect sensitive credentials in the URL by masking the password if it's a URL-like format
+    MASKED_DEST=$(echo "$SYNC_DEST" | sed -E 's/(:\/\/[^:]+:)[^@]+@/\1***@/g')
+    echo "  - SYNC_DEST: $MASKED_DEST"
+else
+    echo "  - SYNC_DEST: (Not Set)"
+fi
+echo "  - SYNC_INTERVAL: ${SYNC_INTERVAL:-5} minutes"
+
 # ---- External Storage Restore (S3/WebDAV) ----
 if [ -n "$SYNC_DEST" ]; then
     echo "[Init] SYNC_DEST is set. Attempting to restore /data from external storage..."
