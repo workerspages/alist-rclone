@@ -117,31 +117,51 @@ docker compose up -d
 
 为了解决此问题，您只需配置 `SYNC_DEST` 环境变量，容器就会在启动时**自动从外部存储拉取完整环境**，并在运行期间**按 `SYNC_INTERVAL` 设定的分钟数（默认 5）自动将最新状态备份回外部存储**（自动排除不必要的缓存和临时文件）。此方案将同时备份 Alist 数据库与 Rclone 配置。
 
-### 1. 备份到 S3 存储桶（推荐，以 Cloudflare R2 为例）
+### 1. 结构化配置：备份到 S3（推荐，以 Cloudflare R2 为例）
 
-添加环境变量，使用标准的 `s3://` 网址格式：
-
-```text
-SYNC_DEST="s3://<你的AK>:<你的SK>@<你的Endpoint地址>/<存储桶名称>"
-```
-*例如：`s3://1b4...:61c...@xxx.r2.cloudflarestorage.com/my-backup`*
-
-*(容器启动时会自动识别并转换为底层所需的高级连接格式，无需担心引号或逗号转义问题)*
-
-### 2. 备份到 WebDAV（以坚果云为例）
-
-添加环境变量，使用标准的 `webdav://` 网址格式：
+添加以下环境变量即可完成配置（无需担心任何复杂的转义和拼写问题）：
 
 ```text
-SYNC_DEST="webdav://<你的账号>:<你的应用密码>@<WebDAV地址>"
+STORAGE_TYPE=s3
+S3_ENDPOINT=https://xxx.r2.cloudflarestorage.com
+S3_ACCESS_KEY=你的AK
+S3_SECRET_KEY=你的SK
+S3_BUCKET=你的存储桶名称
 ```
-*例如：`webdav://admin:pass123@dav.jianguoyun.com/dav/alist-backup`*
 
-*(注意：容器会在启动时自动为您调用 `rclone obscure` 对明文密码进行加密混淆，您**直接填入真实密码**即可，系统绝不会在日志中泄露)*
+*高级选项（可选）：*
+* `S3_REGION`: 默认为 `us-east-1`，如果您使用 Cloudflare R2，系统会自动检测并使用 `auto`。
+* `S3_PATH`: 桶内子路径，例如 `alist-backup/`。
 
-> **高级用法**：如果您依然需要使用复杂的底层参数，`SYNC_DEST` 依然完全向后兼容 Rclone 原生高级连接字符串语法（例如 `:s3,provider=...:`）。
+### 2. 结构化配置：备份到 WebDAV（以坚果云为例）
 
-> **注意**：如果您使用的是常规 VPS 或支持本地硬盘挂载的环境，完全可以忽略此变量，系统默认依靠本地 `/data` 目录保存数据。
+添加以下环境变量：
+
+```text
+STORAGE_TYPE=webdav
+WEBDAV_URL=https://dav.jianguoyun.com/dav/
+WEBDAV_USER=你的账号
+WEBDAV_PASS=你的应用密码
+```
+
+*(注意：容器会在启动时自动为您调用 `rclone obscure` 对 `WEBDAV_PASS` 进行加密混淆，您**直接填入真实明文密码**即可，系统绝不会在日志中泄露)*
+
+*高级选项（可选）：*
+* `WEBDAV_VENDOR`: 默认为 `other`（适配坚果云等），如果您使用 Nextcloud，可设为 `nextcloud`。
+* `WEBDAV_PATH`: 远端子路径，例如 `alist-backup/`。
+
+### 3. 单行网址或原生语法配置（向后兼容/备选方案）
+
+除了上述结构化配置，您仍然可以使用单个 `SYNC_DEST` 变量：
+
+**标准网址格式**：
+* `SYNC_DEST="s3://<你的AK>:<你的SK>@<你的Endpoint地址>/<存储桶名称>"`
+* `SYNC_DEST="webdav://<你的账号>:<应用密码>@<WebDAV地址>"`
+
+**高级原生连接字符串**（适合老用户）：
+* `SYNC_DEST=":s3,provider=...:"` 
+
+> **注意**：如果您使用的是常规 VPS 或支持本地硬盘挂载的环境，完全可以忽略无状态备份配置，系统默认依靠本地 `/data` 目录持久化保存数据。
 
 ---
 

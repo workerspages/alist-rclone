@@ -23,6 +23,67 @@ if [ -n "$TZ" ]; then
     echo "$TZ" > /etc/timezone
 fi
 
+# ---- Structured Storage Configuration ----
+if [ -n "$STORAGE_TYPE" ]; then
+    if [ "$STORAGE_TYPE" = "s3" ]; then
+        if [ -z "$S3_ENDPOINT" ] || [ -z "$S3_ACCESS_KEY" ] || [ -z "$S3_SECRET_KEY" ] || [ -z "$S3_BUCKET" ]; then
+            echo "[Init] Error: STORAGE_TYPE is 's3' but required S3_* variables are missing!"
+            exit 1
+        fi
+        S3_PROVIDER="Other"
+        if [[ "$S3_ENDPOINT" == *"cloudflarestorage"* ]]; then
+            S3_PROVIDER="Cloudflare"
+            S3_REGION="${S3_REGION:-auto}"
+        else
+            S3_REGION="${S3_REGION:-us-east-1}"
+        fi
+        
+        if [[ ! "$S3_ENDPOINT" =~ ^https?:// ]]; then
+            S3_ENDPOINT="https://$S3_ENDPOINT"
+        fi
+        
+        S3_PATH_STR=""
+        if [ -n "$S3_PATH" ]; then
+            S3_PATH_STR="${S3_PATH#/}"
+            S3_PATH_STR="${S3_PATH_STR%/}"
+            if [ -n "$S3_PATH_STR" ]; then
+                S3_PATH_STR="/$S3_PATH_STR"
+            fi
+        fi
+        
+        echo "[Init] Generated Rclone connection string from S3 structured variables."
+        export SYNC_DEST=":s3,provider=\"$S3_PROVIDER\",region=\"$S3_REGION\",endpoint=\"$S3_ENDPOINT\",access_key_id=\"$S3_ACCESS_KEY\",secret_access_key=\"$S3_SECRET_KEY\":$S3_BUCKET$S3_PATH_STR"
+        
+    elif [ "$STORAGE_TYPE" = "webdav" ]; then
+        if [ -z "$WEBDAV_URL" ] || [ -z "$WEBDAV_USER" ] || [ -z "$WEBDAV_PASS" ]; then
+            echo "[Init] Error: STORAGE_TYPE is 'webdav' but required WEBDAV_* variables are missing!"
+            exit 1
+        fi
+        WEBDAV_VENDOR="${WEBDAV_VENDOR:-other}"
+        
+        if [[ ! "$WEBDAV_URL" =~ ^https?:// ]]; then
+            WEBDAV_URL="https://$WEBDAV_URL"
+        fi
+        
+        WEBDAV_PATH_STR=""
+        if [ -n "$WEBDAV_PATH" ]; then
+            WEBDAV_PATH_STR="${WEBDAV_PATH#/}"
+            WEBDAV_PATH_STR="${WEBDAV_PATH_STR%/}"
+            if [ -n "$WEBDAV_PATH_STR" ]; then
+                WEBDAV_PATH_STR="/$WEBDAV_PATH_STR"
+            fi
+        fi
+        
+        OBSCURED_PASS=$(/usr/bin/rclone obscure "$WEBDAV_PASS")
+        
+        echo "[Init] Generated Rclone connection string from WebDAV structured variables."
+        export SYNC_DEST=":webdav,vendor=\"$WEBDAV_VENDOR\",url=\"$WEBDAV_URL\",user=\"$WEBDAV_USER\",pass=\"$OBSCURED_PASS\":$WEBDAV_PATH_STR"
+    else
+        echo "[Init] Error: Unsupported STORAGE_TYPE: $STORAGE_TYPE"
+        exit 1
+    fi
+fi
+
 # ---- Parse SYNC_DEST URL formats ----
 if [ -n "$SYNC_DEST" ]; then
     if [[ "$SYNC_DEST" =~ ^s3://([^:]+):([^@]+)@([^/]+)/(.*)$ ]]; then
