@@ -50,6 +50,11 @@ if [ -n "$STORAGE_TYPE" ]; then
                 S3_PATH_STR="/$S3_PATH_STR"
             fi
         fi
+        # 多实例隔离：如果设置了 INSTANCE_ID，自动追加到路径
+        if [ -n "$INSTANCE_ID" ]; then
+            INSTANCE_ID_CLEAN=$(echo "$INSTANCE_ID" | tr -dc 'a-zA-Z0-9_-')
+            S3_PATH_STR="${S3_PATH_STR}/${INSTANCE_ID_CLEAN}"
+        fi
         
         echo "[Init] Generated Rclone connection string from S3 structured variables."
         export SYNC_DEST=":s3,provider=\"$S3_PROVIDER\",region=\"$S3_REGION\",endpoint=\"$S3_ENDPOINT\",access_key_id=\"$S3_ACCESS_KEY\",secret_access_key=\"$S3_SECRET_KEY\":$S3_BUCKET$S3_PATH_STR"
@@ -72,6 +77,11 @@ if [ -n "$STORAGE_TYPE" ]; then
             if [ -n "$WEBDAV_PATH_STR" ]; then
                 WEBDAV_PATH_STR="/$WEBDAV_PATH_STR"
             fi
+        fi
+        # 多实例隔离：如果设置了 INSTANCE_ID，自动追加到路径
+        if [ -n "$INSTANCE_ID" ]; then
+            INSTANCE_ID_CLEAN=$(echo "$INSTANCE_ID" | tr -dc 'a-zA-Z0-9_-')
+            WEBDAV_PATH_STR="${WEBDAV_PATH_STR}/${INSTANCE_ID_CLEAN}"
         fi
         
         OBSCURED_PASS=$(/usr/bin/rclone obscure "$WEBDAV_PASS")
@@ -126,6 +136,11 @@ else
     echo "  - SYNC_DEST: (Not Set)"
 fi
 echo "  - SYNC_INTERVAL: ${SYNC_INTERVAL:-5} minutes"
+if [ -n "$INSTANCE_ID" ]; then
+    echo "  - INSTANCE_ID: $INSTANCE_ID (多实例隔离已启用)"
+else
+    echo "  - INSTANCE_ID: (未设置 - 如有多个实例共享同一存储桶,请务必设置!)"
+fi
 
 # ---- External Storage Restore (S3/WebDAV) ----
 if [ -n "$SYNC_DEST" ]; then
@@ -144,6 +159,24 @@ if [ -n "$SYNC_DEST" ]; then
         echo "=> [Warning] Pull failed. Network may not be ready. Retrying in 5 seconds..."
         sleep 5
     done
+
+    # ---- 多实例冲突检测 ----
+    if [ "$RESTORE_OK" = true ] && [ -f /data/.sync-instance-id ]; then
+        REMOTE_INSTANCE=$(cat /data/.sync-instance-id 2>/dev/null)
+        CURRENT_INSTANCE="${INSTANCE_ID:-default}"
+        if [ -n "$REMOTE_INSTANCE" ] && [ "$REMOTE_INSTANCE" != "$CURRENT_INSTANCE" ]; then
+            echo "=========================================================================="
+            echo "[WARNING] 多实例冲突检测!"
+            echo "  S3 上的数据来自实例: $REMOTE_INSTANCE"
+            echo "  当前实例 ID: $CURRENT_INSTANCE"
+            echo "  多个实例共享同一 S3 路径会导致数据互相覆盖!"
+            echo "  解决方案: 为每个实例设置不同的 INSTANCE_ID 环境变量"
+            echo "  例如: INSTANCE_ID=northflank / INSTANCE_ID=railway"
+            echo "=========================================================================="
+        fi
+    fi
+    # 写入当前实例标记
+    echo "${INSTANCE_ID:-default}" > /data/.sync-instance-id
 
     # 致命错误保护（熔断机制）：如果30秒后依然无法拉取，强制停止容器！
     # 绝不让程序带病启动，防止触发定时的 autosync 把网盘备份清空。

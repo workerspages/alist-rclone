@@ -33,6 +33,9 @@ services:
       # 方式二：标准网址格式或底层语法（与方式一二选一即可）
       # - SYNC_DEST=s3://AK:SK@xxx.r2.cloudflarestorage.com/bucket
       
+      # 多实例隔离（多个PaaS平台共享同一存储桶时必须设置）
+      # - INSTANCE_ID=northflank
+      
       # 自动同步外部存储的时间间隔
       - SYNC_INTERVAL=5
       
