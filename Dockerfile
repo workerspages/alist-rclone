@@ -36,6 +36,7 @@ RUN apk add --no-cache \
     bash \
     unzip \
     apache2-utils \
+    sqlite \
     && rm -rf /var/cache/apk/*
 
 # Download Alist (use TARGETARCH from Buildx)

@@ -136,7 +136,7 @@ if [ -n "$SYNC_DEST" ]; then
     # 增加重试机制：PaaS容器启动时网络可能存在延迟，最多重试6次（等待30秒）
     for i in 1 2 3 4 5 6; do
         echo "=> [Attempt $i/6] Pulling data from $MASKED_DEST..."
-        if /usr/bin/rclone copy "$SYNC_DEST" /data -u -v; then
+        if /usr/bin/rclone copy "$SYNC_DEST" /data --checksum -v; then
             RESTORE_OK=true
             echo "[Init] Restore successful (or remote is empty)!"
             break
