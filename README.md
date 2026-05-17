@@ -50,7 +50,7 @@ docker run -d \
 ```yaml
 services:
   alist-rclone:
-    image: ghcr.io/workerspages/alist-rclone:main
+    image: ghcr.io/workerspages/alist-rclone:latest
     container_name: alist-rclone
     restart: unless-stopped
     ports:
@@ -61,17 +61,33 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - SWAP_SIZE_MB=512
+      
       # Web 控制台登录凭据
       - WEB_USERNAME=admin
       - WEB_PASSWORD=admin
+      
       # Alist 管理员凭据
       - ALIST_ADMIN_USERNAME=admin
       - ALIST_ADMIN_PASSWORD=admin
-      # 高级变量 (PaaS 持久化与通知)
-      - SYNC_DEST=${SYNC_DEST:-}
-      - SYNC_INTERVAL=${SYNC_INTERVAL:-5}
-      - BARK_URL=${BARK_URL:-}
-
+      
+      # 高级变量 (PaaS 无状态环境自动备份配置)
+      # 方式一：结构化配置（推荐）
+      # - STORAGE_TYPE=s3
+      # - S3_ENDPOINT=https://xxx.r2.cloudflarestorage.com
+      # - S3_ACCESS_KEY=your_ak
+      # - S3_SECRET_KEY=your_sk
+      # - S3_BUCKET=your_bucket
+      # - S3_REGION=auto
+      # - S3_PATH=alist-rclone
+      
+      # 方式二：标准网址格式或底层语法（与方式一二选一即可）
+      # - SYNC_DEST=s3://AK:SK@xxx.r2.cloudflarestorage.com/bucket
+      
+      # 自动同步外部存储的时间间隔
+      - SYNC_INTERVAL=5
+      
+      # 配置后定时任务执行完成时会自动发送推送通知
+      - BARK_URL=https://api.day.app/yourkey
 ```
 
 启动：
