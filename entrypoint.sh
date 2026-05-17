@@ -26,10 +26,11 @@ fi
 # ---- Print Environment Settings ----
 echo "[Init] Current AutoSync Settings:"
 if [ -n "$SYNC_DEST" ]; then
-    # Protect sensitive credentials in the URL by masking the password if it's a URL-like format
-    MASKED_DEST=$(echo "$SYNC_DEST" | sed -E 's/(:\/\/[^:]+:)[^@]+@/\1***@/g')
+    # Protect sensitive credentials in the URL and rclone connection strings
+    MASKED_DEST=$(echo "$SYNC_DEST" | sed -E -e 's/(:\/\/[^:]+:)[^@]+@/\1***@/g' -e 's/(secret_access_key|access_key_id|password|pass|token|client_secret)=("[^"]*"|'\''[^'\'']*'\''|[^,:]+)/\1="***"/g')
     echo "  - SYNC_DEST: $MASKED_DEST"
 else
+    MASKED_DEST="(Not Set)"
     echo "  - SYNC_DEST: (Not Set)"
 fi
 echo "  - SYNC_INTERVAL: ${SYNC_INTERVAL:-5} minutes"
@@ -42,7 +43,7 @@ if [ -n "$SYNC_DEST" ]; then
     
     # 增加重试机制：PaaS容器启动时网络可能存在延迟，最多重试6次（等待30秒）
     for i in 1 2 3 4 5 6; do
-        echo "=> [Attempt $i/6] Pulling data from $SYNC_DEST..."
+        echo "=> [Attempt $i/6] Pulling data from $MASKED_DEST..."
         if /usr/bin/rclone copy "$SYNC_DEST" /data -u -v; then
             RESTORE_OK=true
             echo "[Init] Restore successful (or remote is empty)!"
