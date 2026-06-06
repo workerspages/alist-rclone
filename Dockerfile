@@ -63,7 +63,8 @@ RUN set -ex; \
     elif [ "$TARGETARCH" = "arm64" ]; then RCLONE_ARCH="arm64"; \
     elif [ "$TARGETARCH" = "arm" ]; then RCLONE_ARCH="arm-v7"; \
     else echo "Unsupported arch: $TARGETARCH" && exit 1; fi; \
-    RCLONE_TAG=$(curl -fsS https://api.github.com/repos/wiserain/rclone/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/'); \
+    EFFECTIVE_URL=$(curl -fsSL -o /dev/null -w "%{url_effective}" https://github.com/wiserain/rclone/releases/latest); \
+    RCLONE_TAG=$(basename "$EFFECTIVE_URL"); \
     RCLONE_ZIP="rclone-${RCLONE_TAG}-linux-${RCLONE_ARCH}.zip"; \
     echo "Downloading Rclone mod ($RCLONE_ARCH) tag: $RCLONE_TAG"; \
     curl -fsSL "https://github.com/wiserain/rclone/releases/download/${RCLONE_TAG}/${RCLONE_ZIP}" -o /tmp/rclone.zip && \
