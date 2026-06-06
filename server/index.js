@@ -105,7 +105,8 @@ function monitorJobCompletion(taskId, taskName, jobId) {
         
         let errorMsg = jobStatus.error;
         let isIgnoredError = false;
-        if (errorMsg && (errorMsg.includes('object not found') || errorMsg.includes('directory not found'))) {
+        // 仅精确忽略 "object not found"（动态文件缺失），保留 "directory not found" 等真实配置或网络错误
+        if (errorMsg && errorMsg.includes('object not found')) {
           isIgnoredError = true;
         }
 
@@ -122,7 +123,7 @@ function monitorJobCompletion(taskId, taskName, jobId) {
             if (record) {
               record.status = success ? 'success' : 'error';
               if (isIgnoredError) {
-                record.message = `任务完成 (空目录, 耗时 ${duration} 分钟)`;
+                record.message = `任务完成 (忽略文件缺失, 耗时 ${duration} 分钟)`;
               } else {
                 record.message = success ? `任务完成 (耗时 ${duration} 分钟)` : `任务失败: ${errorMsg}`;
               }
@@ -135,11 +136,9 @@ function monitorJobCompletion(taskId, taskName, jobId) {
           // Send Bark notification
           const notifyPolicy = task.notifyPolicy || (task.notifyOnComplete !== false ? 'always' : 'none');
           if (notifyPolicy === 'always' || (notifyPolicy === 'failure_only' && !success)) {
-            // 对于被忽略的错误，如果设置为 always 依然会通知成功，如果不需要可以在此处跳过
-            // 这里我们当作成功处理
             const title = `任务${statusText}: ${taskName}`;
             const body = isIgnoredError
-              ? `耗时 ${duration} 分钟 (空目录或未找到)`
+              ? `耗时 ${duration} 分钟 (部分动态文件已被覆盖或删除，已忽略)`
               : (success ? `耗时 ${duration} 分钟` : `错误: ${errorMsg || '未知错误'}`);
             await sendBarkNotification(title, body);
           }
