@@ -102,7 +102,14 @@ function monitorJobCompletion(taskId, taskName, jobId) {
       if (jobStatus && jobStatus.finished !== false) {
         clearInterval(timer);
         const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
-        const success = !jobStatus.error;
+        
+        let errorMsg = jobStatus.error;
+        let isIgnoredError = false;
+        if (errorMsg && (errorMsg.includes('object not found') || errorMsg.includes('directory not found'))) {
+          isIgnoredError = true;
+        }
+
+        const success = !errorMsg || isIgnoredError;
         const statusText = success ? '✅ 成功' : '❌ 失败';
 
         // Update task history with completion info
@@ -114,7 +121,11 @@ function monitorJobCompletion(taskId, taskName, jobId) {
             const record = task.history.find(h => h.jobId === jobId);
             if (record) {
               record.status = success ? 'success' : 'error';
-              record.message = success ? `任务完成 (耗时 ${duration} 分钟)` : `任务失败: ${jobStatus.error}`;
+              if (isIgnoredError) {
+                record.message = `任务完成 (空目录, 耗时 ${duration} 分钟)`;
+              } else {
+                record.message = success ? `任务完成 (耗时 ${duration} 分钟)` : `任务失败: ${errorMsg}`;
+              }
               record.completedAt = new Date().toISOString();
               task.lastStatus = record.status;
             }
@@ -124,10 +135,12 @@ function monitorJobCompletion(taskId, taskName, jobId) {
           // Send Bark notification
           const notifyPolicy = task.notifyPolicy || (task.notifyOnComplete !== false ? 'always' : 'none');
           if (notifyPolicy === 'always' || (notifyPolicy === 'failure_only' && !success)) {
+            // 对于被忽略的错误，如果设置为 always 依然会通知成功，如果不需要可以在此处跳过
+            // 这里我们当作成功处理
             const title = `任务${statusText}: ${taskName}`;
-            const body = success
-              ? `耗时 ${duration} 分钟`
-              : `错误: ${jobStatus.error || '未知错误'}`;
+            const body = isIgnoredError
+              ? `耗时 ${duration} 分钟 (空目录或未找到)`
+              : (success ? `耗时 ${duration} 分钟` : `错误: ${errorMsg || '未知错误'}`);
             await sendBarkNotification(title, body);
           }
         }
