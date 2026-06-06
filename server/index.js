@@ -120,14 +120,17 @@ function monitorJobCompletion(taskId, taskName, jobId) {
             }
           }
           saveTasks(tasks);
-        }
 
-        // Send Bark notification
-        const title = `任务${statusText}: ${taskName}`;
-        const body = success
-          ? `耗时 ${duration} 分钟`
-          : `错误: ${jobStatus.error || '未知错误'}`;
-        await sendBarkNotification(title, body);
+          // Send Bark notification
+          const notifyPolicy = task.notifyPolicy || (task.notifyOnComplete !== false ? 'always' : 'none');
+          if (notifyPolicy === 'always' || (notifyPolicy === 'failure_only' && !success)) {
+            const title = `任务${statusText}: ${taskName}`;
+            const body = success
+              ? `耗时 ${duration} 分钟`
+              : `错误: ${jobStatus.error || '未知错误'}`;
+            await sendBarkNotification(title, body);
+          }
+        }
       }
     } catch (err) {
       // Job no longer exists (rclone restarted), stop monitoring
@@ -621,9 +624,12 @@ function scheduleTask(task) {
     if (t.history.length > 50) t.history = t.history.slice(0, 50);
     saveTasks(tasks);
 
+    const notifyPolicy = t.notifyPolicy || (t.notifyOnComplete !== false ? 'always' : 'none');
     // Monitor job completion for Bark notification
-    if (record.jobId && t.notifyOnComplete !== false) {
+    if (record.jobId && notifyPolicy !== 'none') {
       monitorJobCompletion(t.id, t.name, record.jobId);
+    } else if (record.status === 'error' && notifyPolicy !== 'none') {
+      sendBarkNotification(`任务❌ 失败: ${t.name}`, `启动错误: ${record.message}`);
     }
   }, { scheduled: true, timezone: 'Asia/Shanghai' });
   cronJobs.set(task.id, job);
@@ -656,7 +662,7 @@ app.get('/api/tasks', authMiddleware, (req, res) => {
 });
 
 app.post('/api/tasks', authMiddleware, (req, res) => {
-  const { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, enabled, notifyOnComplete, advancedOptions } = req.body;
+  const { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, enabled, notifyPolicy, notifyOnComplete, advancedOptions } = req.body;
   if (!name || !srcRemote || !dstRemote) {
     return res.status(400).json({ error: '任务名称、源存储和目标存储为必填项' });
   }
@@ -673,7 +679,8 @@ app.post('/api/tasks', authMiddleware, (req, res) => {
     mode: mode || 'copy',
     cron: cronExpr || '',
     enabled: enabled !== false,
-    notifyOnComplete: notifyOnComplete !== false,
+    notifyPolicy: notifyPolicy || (notifyOnComplete !== false ? 'always' : 'none'),
+    notifyOnComplete: notifyPolicy !== 'none' && notifyOnComplete !== false, // Backward compatibility
     advancedOptions: advancedOptions || {},
     lastRun: null,
     lastStatus: null,
@@ -693,7 +700,7 @@ app.put('/api/tasks/:id', authMiddleware, (req, res) => {
   const idx = tasks.findIndex(t => t.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: '任务不存在' });
 
-  const { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, enabled, notifyOnComplete, advancedOptions } = req.body;
+  const { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, enabled, notifyPolicy, notifyOnComplete, advancedOptions } = req.body;
   if (cronExpr && !cron.validate(cronExpr)) {
     return res.status(400).json({ error: 'Cron 表达式格式无效' });
   }
@@ -708,7 +715,13 @@ app.put('/api/tasks/:id', authMiddleware, (req, res) => {
   if (cronExpr !== undefined) task.cron = cronExpr;
   if (enabled !== undefined) task.enabled = enabled;
   if (advancedOptions !== undefined) task.advancedOptions = advancedOptions;
-  if (notifyOnComplete !== undefined) task.notifyOnComplete = notifyOnComplete;
+  if (notifyPolicy !== undefined) {
+    task.notifyPolicy = notifyPolicy;
+    task.notifyOnComplete = notifyPolicy !== 'none';
+  } else if (notifyOnComplete !== undefined) {
+    task.notifyOnComplete = notifyOnComplete;
+    task.notifyPolicy = notifyOnComplete ? 'always' : 'none';
+  }
 
   saveTasks(tasks);
   scheduleTask(task);
@@ -748,9 +761,12 @@ app.post('/api/tasks/:id/run', authMiddleware, async (req, res) => {
   if (task.history.length > 50) task.history = task.history.slice(0, 50);
   saveTasks(tasks);
 
+  const notifyPolicy = task.notifyPolicy || (task.notifyOnComplete !== false ? 'always' : 'none');
   // Monitor job completion for Bark notification
-  if (record.jobId && task.notifyOnComplete !== false) {
+  if (record.jobId && notifyPolicy !== 'none') {
     monitorJobCompletion(task.id, task.name, record.jobId);
+  } else if (record.status === 'error' && notifyPolicy !== 'none') {
+    sendBarkNotification(`任务❌ 失败: ${task.name}`, `启动错误: ${record.message}`);
   }
   res.json({ success: true, record });
 });

@@ -1026,7 +1026,7 @@ const App = {
         // Reset advanced
         document.getElementById('task-opt-custom').value = '';
         // Reset notification toggle
-        document.getElementById('task-notify').checked = true;
+        document.getElementById('task-notify-policy').value = 'always';
 
         if (editId) {
             document.getElementById('task-modal-title').textContent = '编辑任务';
@@ -1051,7 +1051,8 @@ const App = {
                         document.getElementById('task-opt-custom').value = App.stringifyRcloneArgs(task.advancedOptions);
                     }
                     // Notification toggle
-                    document.getElementById('task-notify').checked = task.notifyOnComplete !== false;
+                    const policy = task.notifyPolicy || (task.notifyOnComplete !== false ? 'always' : 'none');
+                    document.getElementById('task-notify-policy').value = policy;
                 }
             } catch (err) {
                 this.toast('加载任务详情失败', 'error');
@@ -1088,7 +1089,8 @@ const App = {
         const customArgsStr = document.getElementById('task-opt-custom').value.trim();
         const advancedOptions = App.parseRcloneArgs(customArgsStr);
 
-        const body = { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, notifyOnComplete: document.getElementById('task-notify').checked, advancedOptions };
+        const notifyPolicy = document.getElementById('task-notify-policy').value;
+        const body = { name, srcRemote, srcPath, dstRemote, dstPath, mode, cron: cronExpr, notifyPolicy, notifyOnComplete: notifyPolicy !== 'none', advancedOptions };
 
         try {
             if (editId) {
