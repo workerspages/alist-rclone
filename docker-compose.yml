@@ -40,3 +40,6 @@ services:
       
       # 配置后定时任务执行完成时会自动发送推送通知
       - BARK_URL=https://api.day.app/yourkey
+      
+      # [可选] 自定义需要静默忽略的错误关键字（用英文逗号分隔），包含这些关键字的错误将被当做成功记录，且不发送失败报警
+      - IGNORE_ERRORS=object not found,409 Conflict,Method Not Allowed

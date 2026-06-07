@@ -18,6 +18,14 @@ const WEB_USERNAME = process.env.WEB_USERNAME || 'admin';
 const WEB_PASSWORD = process.env.WEB_PASSWORD || 'admin';
 const RCLONE_ADDR = process.env.RCLONE_ADDR || 'http://127.0.0.1:5572';
 const BARK_URL = process.env.BARK_URL || ''; // e.g. https://api.day.app/yourkey
+const IGNORE_ERRORS = process.env.IGNORE_ERRORS || 'object not found'; // Comma-separated list of errors to ignore
+
+// Helper to check if an error should be ignored
+function isErrorIgnored(errorMsg) {
+  if (!errorMsg) return false;
+  const ignoreList = IGNORE_ERRORS.split(',').map(s => s.trim()).filter(Boolean);
+  return ignoreList.some(ignoreStr => errorMsg.includes(ignoreStr));
+}
 
 // ========================
 // Auth Middleware
@@ -104,11 +112,7 @@ function monitorJobCompletion(taskId, taskName, jobId) {
         const duration = ((Date.now() - startTime) / 1000 / 60).toFixed(1);
         
         let errorMsg = jobStatus.error;
-        let isIgnoredError = false;
-        // 仅精确忽略 "object not found"（动态文件缺失），保留 "directory not found" 等真实配置或网络错误
-        if (errorMsg && errorMsg.includes('object not found')) {
-          isIgnoredError = true;
-        }
+        let isIgnoredError = isErrorIgnored(errorMsg);
 
         const success = !errorMsg || isIgnoredError;
         const statusText = success ? '✅ 成功' : '❌ 失败';
@@ -637,10 +641,12 @@ function scheduleTask(task) {
     saveTasks(tasks);
 
     const notifyPolicy = t.notifyPolicy || (t.notifyOnComplete !== false ? 'always' : 'none');
+    const isIgnored = isErrorIgnored(record.message);
+    
     // Monitor job completion for Bark notification
     if (record.jobId && notifyPolicy !== 'none') {
       monitorJobCompletion(t.id, t.name, record.jobId);
-    } else if (record.status === 'error' && notifyPolicy !== 'none') {
+    } else if (record.status === 'error' && notifyPolicy !== 'none' && !isIgnored) {
       sendBarkNotification(`任务❌ 失败: ${t.name}`, `启动错误: ${record.message}`);
     }
   }, { scheduled: true, timezone: 'Asia/Shanghai' });
@@ -774,10 +780,12 @@ app.post('/api/tasks/:id/run', authMiddleware, async (req, res) => {
   saveTasks(tasks);
 
   const notifyPolicy = task.notifyPolicy || (task.notifyOnComplete !== false ? 'always' : 'none');
+  const isIgnored = isErrorIgnored(record.message);
+  
   // Monitor job completion for Bark notification
   if (record.jobId && notifyPolicy !== 'none') {
     monitorJobCompletion(task.id, task.name, record.jobId);
-  } else if (record.status === 'error' && notifyPolicy !== 'none') {
+  } else if (record.status === 'error' && notifyPolicy !== 'none' && !isIgnored) {
     sendBarkNotification(`任务❌ 失败: ${task.name}`, `启动错误: ${record.message}`);
   }
   res.json({ success: true, record });

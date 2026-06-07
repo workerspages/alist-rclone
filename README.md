@@ -122,6 +122,7 @@ docker compose up -d
 | `CUSTOM_CA_CERT_PATH` | - | ❌ | 自定义 CA 证书的容器内路径（可为文件或目录），用于信任私有/自签证书 |
 | `SWAP_SIZE_MB` | - | ❌ | 交换内存（虚拟内存）大小，单位为MB。例如 `512`表示分配512MB。开启此功能可能需要开启容器特权模式 |
 | `BARK_URL` | - | ❌ | Bark 推送通知服务器地址（如 `https://api.day.app/yourkey`）。配置后定时任务执行完成时会自动发送推送通知 |
+| `IGNORE_ERRORS` | `object not found` | ❌ | 自定义需要静默忽略的错误关键字（多个用英文逗号分隔），包含这些关键字的错误将被当做成功，不发失败报警 |
 
 > ⚠️ **安全提示**：首次部署时请务必修改 `WEB_PASSWORD` 和 `ALIST_ADMIN_PASSWORD`，不要使用默认值。
 
