@@ -608,32 +608,24 @@ async function bootstrap() {
         }
     }
 
-	// 4. 解析并建立持久化连接 (配置文件法，最稳妥)
-    let SYNC_DEST = null; // 【新增这一行】
+    // 4. 解析并建立持久化连接 (配置文件法，最稳妥)
+    let SYNC_DEST = null;
+    const syncConfPath = path.join(ROOT_DIR, 'sync.conf'); // 使用外部独立配置文件，防止被覆盖
     if (process.env.STORAGE_TYPE === 'webdav') {
         console.log('[Init] Setting up WebDAV via config file...');
-        const rcloneConfigPath = path.join(ROOT_DIR, 'rclone-temp.conf');
         let pass = process.env.WEBDAV_PASS;
         try {
             pass = execSync(`rclone obscure "${process.env.WEBDAV_PASS}"`, { encoding: 'utf-8' }).trim();
         } catch(e) { console.warn('[Init] Obscure failed, using plain password'); }
 
-        const confContent = `[remote]
-type = webdav
-url = ${process.env.WEBDAV_URL}
-vendor = ${process.env.WEBDAV_VENDOR || 'other'}
-user = ${process.env.WEBDAV_USER}
-pass = ${pass}
-`;
-        fs.writeFileSync(rcloneConfigPath, confContent);
+        const confContent = `[remote]\ntype = webdav\nurl = ${process.env.WEBDAV_URL}\nvendor = ${process.env.WEBDAV_VENDOR || 'other'}\nuser = ${process.env.WEBDAV_USER}\npass = ${pass}\n`;
+        fs.writeFileSync(syncConfPath, confContent);
 
-        console.log('[Init] Attempting to pull data using config file...');
+        console.log('[Init] Attempting to pull data using permanent config file...');
         try {
-            // 【修正】这里我们明确给 SYNC_DEST 赋值，让后续代码能识别
             SYNC_DEST = `remote:${process.env.WEBDAV_PATH}`; 
-            execSync(`rclone copy "${SYNC_DEST}" "${DATA_DIR}" --config "${rcloneConfigPath}" --checksum -v`, { stdio: 'inherit' });
+            execSync(`rclone copy "${SYNC_DEST}" "${DATA_DIR}" --config "${syncConfPath}" --checksum -v`, { stdio: 'inherit' });
             console.log('[Init] Restore successful!');
-            fs.unlinkSync(rcloneConfigPath);
         } catch (e) {
             console.error('[FATAL ERROR] Restore failed!', e.message);
             process.exit(1); 
@@ -686,7 +678,8 @@ pass = ${pass}
             console.log(`[AutoSync] === Pushing updates to remote ===`);
             try {
                 execSync(`sqlite3 "${path.join(alistConfigDir, 'data.db')}" "PRAGMA wal_checkpoint(TRUNCATE);" 2>/dev/null || true`);
-                execSync(`rclone sync "${DATA_DIR}" "${SYNC_DEST}" --checksum --exclude "rclone/cache/**" --exclude "alist/data/temp/**" --exclude "alist/temp/**" --exclude "alist/data/bleve/**" --exclude "alist/data/log/**" -v`, { stdio: 'inherit' });
+                // 【修复点】：在这里为 rclone sync 加上 --config 参数，指明配置文件的确切位置
+                execSync(`rclone sync "${DATA_DIR}" "${SYNC_DEST}" --config "${syncConfPath}" --checksum --exclude "rclone/cache/**" --exclude "alist/data/temp/**" --exclude "alist/temp/**" --exclude "alist/data/bleve/**" --exclude "alist/data/log/**" -v`, { stdio: 'inherit' });
                 console.log(`[AutoSync] Push complete.`);
             } catch (e) { console.error(`[AutoSync] Push failed:`, e.message); }
         }, syncIntervalMin * 60 * 1000);
