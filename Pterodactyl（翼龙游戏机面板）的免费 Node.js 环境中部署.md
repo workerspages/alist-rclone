@@ -106,6 +106,12 @@ process.env.WEBDAV_PASS = '你的密码';
 process.env.WEBDAV_VENDOR = 'other';
 process.env.WEBDAV_PATH = '远端子路径';
 
+// 自动同步外部存储的时间间隔
+process.env.SYNC_INTERVAL= '5';
+
+// 配置后定时任务执行完成时会自动发送推送通知
+// process.env.BARK_URL= 'https://api.day.app/yourkey';
+
 
 // 进程引用
 let alistProcess = null;
