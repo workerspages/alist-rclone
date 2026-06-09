@@ -37,7 +37,7 @@
 
 确保包含 `http-proxy-middleware` 和 `adm-zip` 等依赖。平台在启动时通常会自动执行 `npm install`。
 
-```json
+```javascript
 process.env.ALIST_ADMIN_PASSWORD = '这里换成你想要的Alist密码';
 process.env.WEB_PASSWORD = '这里换成你想要的控制台密码';
 
