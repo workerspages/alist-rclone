@@ -38,32 +38,6 @@
 确保包含 `http-proxy-middleware` 和 `adm-zip` 等依赖。平台在启动时通常会自动执行 `npm install`。
 
 ```json
-{
-  "name": "alist-rclone-paas",
-  "version": "1.0.0",
-  "description": "Alist-Rclone All-in-One for Node.js PaaS",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
-  "dependencies": {
-    "express": "^4.21.0",
-    "express-rate-limit": "^8.3.0",
-    "jsonwebtoken": "^9.0.2",
-    "node-cron": "^3.0.3",
-    "uuid": "^9.0.1",
-    "http-proxy-middleware": "^3.0.0",
-    "adm-zip": "^0.5.10"
-  }
-}
-
-```
-
-#### 文件二：`index.js`
-
-这是修改了端口适配逻辑（兼容 `SERVER_PORT`）的最终完整核心文件。
-
-```javascript
 process.env.ALIST_ADMIN_PASSWORD = '这里换成你想要的Alist密码';
 process.env.WEB_PASSWORD = '这里换成你想要的控制台密码';
 
@@ -634,42 +608,37 @@ async function bootstrap() {
         }
     }
 
-    // 4. 解析 SYNC_DEST 无状态平台数据恢复机制
-    let SYNC_DEST = process.env.SYNC_DEST;
-    const STORAGE_TYPE = process.env.STORAGE_TYPE;
-    if (STORAGE_TYPE === 's3') {
-        const endpoint = process.env.S3_ENDPOINT || '';
-        const provider = endpoint.includes('cloudflarestorage') ? 'Cloudflare' : 'Other';
-        const region = process.env.S3_REGION || (provider === 'Cloudflare' ? 'auto' : 'us-east-1');
-        let ep = endpoint.startsWith('http') ? endpoint : `https://${endpoint}`;
-        let s3Path = process.env.S3_PATH ? ('/' + process.env.S3_PATH.replace(/^\/+/, '')) : '';
-        SYNC_DEST = `:s3,provider="${provider}",region="${region}",endpoint="${ep}",access_key_id="${process.env.S3_ACCESS_KEY}",secret_access_key="${process.env.S3_SECRET_KEY}":${process.env.S3_BUCKET}${s3Path}`;
-    } else if (STORAGE_TYPE === 'webdav') {
-        let ep = process.env.WEBDAV_URL || '';
-        if (!ep.startsWith('http')) ep = `https://${ep}`;
-        let davPath = process.env.WEBDAV_PATH ? ('/' + process.env.WEBDAV_PATH.replace(/^\/+/, '')) : '';
-        const obscured = execSync(`rclone obscure "${process.env.WEBDAV_PASS}"`, { encoding: 'utf-8' }).trim();
-        SYNC_DEST = `:webdav,vendor="${process.env.WEBDAV_VENDOR || 'other'}",url="${ep}",user="${process.env.WEBDAV_USER}",pass="${obscured}":${davPath}`;
-    }
-
-    if (SYNC_DEST) {
-        console.log('[Init] SYNC_DEST is set. Attempting to pull persistence data from remote...');
+	// 4. 解析并建立持久化连接 (配置文件法，最稳妥)
+    let SYNC_DEST = null; // 【新增这一行】
+    if (process.env.STORAGE_TYPE === 'webdav') {
+        console.log('[Init] Setting up WebDAV via config file...');
+        const rcloneConfigPath = path.join(ROOT_DIR, 'rclone-temp.conf');
+        let pass = process.env.WEBDAV_PASS;
         try {
-            execSync(`rclone copy "${SYNC_DEST}" "${DATA_DIR}" --checksum -v`, { stdio: 'inherit' });
+            pass = execSync(`rclone obscure "${process.env.WEBDAV_PASS}"`, { encoding: 'utf-8' }).trim();
+        } catch(e) { console.warn('[Init] Obscure failed, using plain password'); }
+
+        const confContent = `[remote]
+type = webdav
+url = ${process.env.WEBDAV_URL}
+vendor = ${process.env.WEBDAV_VENDOR || 'other'}
+user = ${process.env.WEBDAV_USER}
+pass = ${pass}
+`;
+        fs.writeFileSync(rcloneConfigPath, confContent);
+
+        console.log('[Init] Attempting to pull data using config file...');
+        try {
+            // 【修正】这里我们明确给 SYNC_DEST 赋值，让后续代码能识别
+            SYNC_DEST = `remote:${process.env.WEBDAV_PATH}`; 
+            execSync(`rclone copy "${SYNC_DEST}" "${DATA_DIR}" --config "${rcloneConfigPath}" --checksum -v`, { stdio: 'inherit' });
             console.log('[Init] Restore successful!');
+            fs.unlinkSync(rcloneConfigPath);
         } catch (e) {
-            console.error('[FATAL ERROR] Failed to restore data from SYNC_DEST. Halting to prevent wiping external backup.', e.message);
-            process.exit(1);
+            console.error('[FATAL ERROR] Restore failed!', e.message);
+            process.exit(1); 
         }
     }
-
-    // 清理任务历史防止死锁
-    try {
-        const tasks = loadTasks();
-        let modified = false;
-        tasks.forEach(t => { if (t.history?.length > 0 || t.activeJobId) { t.history = []; t.activeJobId = null; modified = true; } });
-        if (modified) saveTasks(tasks);
-    } catch {}
 
     // 5. 初始化 Alist 和配置管理员密码
     const alistConfigDir = path.join(DATA_DIR, 'alist');
