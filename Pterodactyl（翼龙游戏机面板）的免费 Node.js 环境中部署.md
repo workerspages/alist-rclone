@@ -98,6 +98,15 @@ const RCLONE_ADDR = process.env.RCLONE_ADDR || 'http://127.0.0.1:5572';
 const BARK_URL = process.env.BARK_URL || '';
 const IGNORE_ERRORS = process.env.IGNORE_ERRORS || 'object not found';
 
+// 【新增】将你的数据库信息直接填在这里
+process.env.STORAGE_TYPE = 'webdav';
+process.env.WEBDAV_URL = 'https://dav.jianguoyun.com/dav/';
+process.env.WEBDAV_USER = '你的账号';
+process.env.WEBDAV_PASS = '你的密码';
+process.env.WEBDAV_VENDOR = 'other';
+process.env.WEBDAV_PATH = '远端子路径';
+
+
 // 进程引用
 let alistProcess = null;
 let rcloneProcess = null;
