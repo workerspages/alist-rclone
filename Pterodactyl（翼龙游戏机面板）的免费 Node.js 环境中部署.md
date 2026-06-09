@@ -64,6 +64,9 @@
 这是修改了端口适配逻辑（兼容 `SERVER_PORT`）的最终完整核心文件。
 
 ```javascript
+process.env.ALIST_ADMIN_PASSWORD = '这里换成你想要的Alist密码';
+process.env.WEB_PASSWORD = '这里换成你想要的控制台密码';
+
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const { execSync, spawn, execFile } = require('child_process');
@@ -82,7 +85,6 @@ const execFilePromise = util.promisify(execFile);
 // ========================
 // 平台环境与路径配置
 // ========================
-// 完美兼容 Pterodactyl 面板的 SERVER_PORT 和常规的 PORT
 const PORT = process.env.SERVER_PORT || process.env.PORT || 8080;
 const ROOT_DIR = __dirname;
 const DATA_DIR = path.join(ROOT_DIR, 'data');
@@ -101,7 +103,7 @@ let alistProcess = null;
 let rcloneProcess = null;
 
 // ========================
-// 内存日志系统 (替代原 Nginx/Supervisor 文件日志)
+// 内存日志系统
 // ========================
 const logsMemory = { alist: [], rclone: [], api: [] };
 function appendLog(service, data) {
@@ -237,7 +239,9 @@ function monitorJobCompletion(taskId, taskName, jobId) {
 // ========================
 const app = express();
 app.set('trust proxy', 1);
-app.use(express.json());
+
+// 【修复核心点】：限制 express.json() 仅对 /console-api/ 生效，防止吃掉 Alist 代理的 POST 请求
+app.use('/console-api', express.json());
 
 function authMiddleware(req, res, next) {
     const token = req.headers.authorization?.replace('Bearer ', '');
@@ -602,7 +606,6 @@ async function bootstrap() {
             
             const zip = new AdmZip(zipFile);
             zip.extractAllTo(BIN_DIR, true);
-            // wiserain 的 zip 解压后含文件夹，将 rclone 移至根 bin
             const extractedDir = fs.readdirSync(BIN_DIR).find(f => f.startsWith('rclone-'));
             if (extractedDir) {
                 fs.renameSync(path.join(BIN_DIR, extractedDir, 'rclone'), rclonePath);
@@ -714,7 +717,6 @@ async function bootstrap() {
 
 // 引导启动
 bootstrap();
-
 ```
 
 ### 步骤 4：配置启动命令和环境变量
