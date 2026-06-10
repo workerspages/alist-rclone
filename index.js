@@ -601,6 +601,18 @@ async function bootstrap() {
 
     // 5. 初始化 Alist 和配置管理员密码
     const alistConfigDir = path.join(DATA_DIR, 'alist');
+
+    // [新增] 启动时强力清理历史临时文件，释放面板容器的存储空间
+    try {
+        console.log('[Init] Cleaning up legacy Alist temporary files to free up space...');
+        const temp1 = path.join(alistConfigDir, 'temp');
+        const temp2 = path.join(alistConfigDir, 'data', 'temp');
+        execSync(`rm -rf "${temp1}" "${temp2}" 2>/dev/null || true`);
+        execSync(`mkdir -p "${temp1}" "${temp2}" 2>/dev/null || true`);
+    } catch (e) {
+        console.warn('[Init] Warning: Failed to clean temp files:', e.message);
+    }
+
     if (!fs.existsSync(path.join(alistConfigDir, 'config.json'))) {
         console.log('[Init] First run, creating Alist configuration...');
         const initAlist = spawn(alistPath, ['server', '--data', alistConfigDir]);
@@ -681,6 +693,22 @@ async function bootstrap() {
     app.listen(PORT, '0.0.0.0', () => {
         console.log(`[System] Node.js All-in-One Server is listening on port ${PORT}`);
         initScheduler();
+
+        // [新增] 自动定时清理 Alist 临时文件防爆盘机制
+        console.log(`[System] Background temp files cleanup task scheduled.`);
+        setInterval(() => {
+            try {
+                const temp1 = path.join(alistConfigDir, 'temp');
+                const temp2 = path.join(alistConfigDir, 'data', 'temp');
+                // 确保目录存在以防 find 报错
+                execSync(`mkdir -p "${temp1}" "${temp2}" 2>/dev/null || true`);
+                // 查找并删除修改时间超过 2 小时（120分钟）的临时文件
+                execSync(`find "${temp1}" -type f -mmin +120 -delete 2>/dev/null || true`);
+                execSync(`find "${temp2}" -type f -mmin +120 -delete 2>/dev/null || true`);
+            } catch (e) {
+                // 忽略执行过程中的错误，避免应用崩溃
+            }
+        }, 30 * 60 * 1000); // 每 30 分钟执行一次清理
     });
 }
 
