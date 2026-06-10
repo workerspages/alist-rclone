@@ -213,20 +213,12 @@ if [ ! -f /data/rclone/rclone.conf ]; then
 fi
 
 ALIST_REMOTE_NAME="alist"
-if ! grep -q "\[$ALIST_REMOTE_NAME\]" /data/rclone/rclone.conf; then
-    ALIST_USER="${ALIST_ADMIN_USERNAME:-admin}"
-    ALIST_PASS="${ALIST_ADMIN_PASSWORD:-admin}"
-    OBSCURED_PASS=$(rclone obscure "$ALIST_PASS")
-    cat >> /data/rclone/rclone.conf <<EOF
+ALIST_USER="${ALIST_ADMIN_USERNAME:-admin}"
+ALIST_PASS="${ALIST_ADMIN_PASSWORD:-admin}"
 
-[$ALIST_REMOTE_NAME]
-type = webdav
-url = http://127.0.0.1:5244/dav
-vendor = other
-user = $ALIST_USER
-pass = $OBSCURED_PASS
-EOF
-fi
+echo "[Init] Updating built-in Alist remote configuration..."
+# 每次启动强制覆写 Alist 本地连接凭据，防止环境变量修改后不同步
+/usr/bin/rclone config create "$ALIST_REMOTE_NAME" webdav url "http://127.0.0.1:5244/dav" vendor "other" user "$ALIST_USER" pass "$ALIST_PASS" --config /data/rclone/rclone.conf >/dev/null 2>&1
 
 HOST_REMOTE_NAME="host"
 if ! grep -q "\[$HOST_REMOTE_NAME\]" /data/rclone/rclone.conf; then
