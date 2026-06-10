@@ -146,7 +146,6 @@ if [ -n "$SYNC_DEST" ]; then
     done
 
     # 致命错误保护（熔断机制）：如果30秒后依然无法拉取，强制停止容器！
-    # 绝不让程序带病启动，防止触发定时的 autosync 把网盘备份清空。
     if [ "$RESTORE_OK" != true ]; then
         echo "=========================================================================="
         echo "[FATAL ERROR] Failed to restore data from SYNC_DEST after 30 seconds!"
@@ -158,8 +157,6 @@ if [ -n "$SYNC_DEST" ]; then
 fi
 
 # ---- Clean Scheduled Tasks History ----
-# 它会在容器内存里利用 Node 快速扫一遍 JSON，将所有任务的 history 数组置空，同时解除了可能因为容器异常重启导致的 activeJobId 死锁。
-# 这让系统保持持久化的配置的同时，彻底阻断了日志的冗余积累
 echo "[Init] Cleaning up scheduled tasks history..."
 if [ -f /data/rclone/scheduled-tasks.json ]; then
     node -e "
@@ -190,10 +187,46 @@ fi
 
 # ---- Initialize Alist ----
 echo "[Init] Initializing Alist..."
-# 强力清理可能从 S3 带来的 SQLite 临时锁文件，防止启动时数据库损坏引发 exit status 1
+
 if [ -d /data/alist ]; then
+    # 1. 强力清理可能从 S3 带来的 SQLite 临时锁文件
     echo "[Init] Cleaning up residual SQLite WAL files to prevent database locks..."
     rm -f /data/alist/*.db-wal /data/alist/*.db-shm
+
+    # 2. 检查数据库完整性（安抚与排错诊断）
+    if [ -f /data/alist/data.db ]; then
+        echo "[Init] Checking SQLite database integrity..."
+        CHECK_RESULT=$(sqlite3 /data/alist/data.db "PRAGMA integrity_check;" 2>&1 || echo "failed")
+        if [[ "$CHECK_RESULT" == *"ok"* ]]; then
+            echo "[Init] Success: Database integrity is OK."
+        else
+            echo "[Init] WARNING: Database might be corrupted. Output: $CHECK_RESULT"
+            echo "[Init] WARNING: If Alist fails to start, consider deleting /data/alist/data.db from your S3 bucket."
+        fi
+    fi
+
+    # 3. 强制修复 config.json，剔除不兼容的 HTTPS 证书路径和绑定限制
+    if [ -f /data/alist/config.json ]; then
+        echo "[Init] Patching Alist config.json for PaaS compatibility..."
+        node -e "
+        const fs = require('fs');
+        try {
+            const file = '/data/alist/config.json';
+            let cfg = JSON.parse(fs.readFileSync(file, 'utf-8'));
+            if (cfg.scheme) {
+                cfg.scheme.address = '0.0.0.0';
+                cfg.scheme.http_port = 5244;
+                cfg.scheme.force_https = false;
+                cfg.scheme.cert_file = '';
+                cfg.scheme.key_file = '';
+            }
+            fs.writeFileSync(file, JSON.stringify(cfg, null, 2), 'utf-8');
+            console.log('[Init] Successfully patched config.json.');
+        } catch(e) {
+            console.error('[Init] Failed to patch config.json:', e.message);
+        }
+        "
+    fi
 fi
 
 if [ ! -f /data/alist/config.json ]; then
@@ -224,7 +257,6 @@ ALIST_PASS="${ALIST_ADMIN_PASSWORD:-admin}"
 
 echo "[Init] Updating built-in Alist remote configuration..."
 if ! grep -q "\[$ALIST_REMOTE_NAME\]" /data/rclone/rclone.conf; then
-    # 如果不存在，安全创建
     OBSCURED_PASS=$(/usr/bin/rclone obscure "$ALIST_PASS")
     cat >> /data/rclone/rclone.conf <<EOF
 
@@ -236,7 +268,6 @@ user = $ALIST_USER
 pass = $OBSCURED_PASS
 EOF
 else
-    # 如果已存在，强制使用 update 覆写最新账号密码（注意 url 坚决不带末尾斜杠）
     /usr/bin/rclone config update "$ALIST_REMOTE_NAME" url "http://127.0.0.1:5244/dav" vendor "other" user "$ALIST_USER" pass "$ALIST_PASS" --config /data/rclone/rclone.conf >/dev/null 2>&1 || true
 fi
 
