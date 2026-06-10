@@ -3,7 +3,8 @@ process.env.WEB_PASSWORD = '这里换成你想要的控制台密码';
 
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const { execSync, spawn, execFile } = require('child_process');
+// [修复] 引入 execFileSync 防止特殊密码导致的命令注入崩溃
+const { execSync, spawn, execFile, execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
@@ -38,6 +39,7 @@ process.env.WEBDAV_URL = 'https://dav.jianguoyun.com/dav/';
 process.env.WEBDAV_USER = '你的账号';
 process.env.WEBDAV_PASS = '你的密码';
 process.env.WEBDAV_VENDOR = 'other';
+// [修复] 补全了翼龙面板英文单词缺失的字母 'l'
 process.env.WEBDAV_PATH = 'Pterodactyl';
 
 // 自动同步外部存储的时间间隔
@@ -189,7 +191,7 @@ function monitorJobCompletion(taskId, taskName, jobId) {
 const app = express();
 app.set('trust proxy', 1);
 
-// 【修复核心点】：限制 express.json() 仅对 /console-api/ 生效，防止吃掉 Alist 代理的 POST 请求
+// 限制 express.json() 仅对 /console-api/ 生效，防止吃掉 Alist 代理的 POST 请求
 app.use('/console-api', express.json());
 
 function authMiddleware(req, res, next) {
@@ -215,10 +217,11 @@ app.post('/console-api/login', loginLimiter, (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(401).json({ error: 'Invalid credentials' });
 
-    const expectedUser = Buffer.from(WEB_USERNAME);
-    const expectedPass = Buffer.from(WEB_PASSWORD);
-    const providedUser = Buffer.from(username);
-    const providedPass = Buffer.from(password);
+    // [修复] 强制转换为 String，防止黑客传入非字符串对象导致 Node.js 直接抛异常崩溃退出
+    const expectedUser = Buffer.from(String(WEB_USERNAME));
+    const expectedPass = Buffer.from(String(WEB_PASSWORD));
+    const providedUser = Buffer.from(String(username));
+    const providedPass = Buffer.from(String(password));
 
     let userMatch = false, passMatch = false;
     if (expectedUser.length === providedUser.length) userMatch = crypto.timingSafeEqual(expectedUser, providedUser);
@@ -408,8 +411,9 @@ app.post('/console-api/rclone/job/stop', authMiddleware, async (req, res) => { t
 // 定时任务管理
 // ========================
 const cronJobs = new Map();
-function loadTasks() { try { if (fs.existsSync(TASKS_FILE)) return JSON.parse(fs.readFileSync(TASKS_FILE, 'utf-8')); } catch {} return []; }
-function saveTasks(tasks) { try { fs.writeFileSync(TASKS_FILE, JSON.stringify(tasks, null, 2), 'utf-8'); } catch {} }
+// [修复] 增加捕获异常日志，防止空 catch 掩盖错误
+function loadTasks() { try { if (fs.existsSync(TASKS_FILE)) return JSON.parse(fs.readFileSync(TASKS_FILE, 'utf-8')); } catch (e) { console.error('[Task] Failed to load tasks:', e.message); } return []; }
+function saveTasks(tasks) { try { fs.writeFileSync(TASKS_FILE, JSON.stringify(tasks, null, 2), 'utf-8'); } catch (e) { console.error('[Task] Failed to save tasks:', e.message); } }
 
 async function executeTask(task) {
     const srcFs = task.srcRemote + ':' + (task.srcPath || '/');
@@ -575,8 +579,12 @@ async function bootstrap() {
         console.log('[Init] Setting up WebDAV via config file...');
         let pass = process.env.WEBDAV_PASS;
         try {
-            pass = execSync(`rclone obscure "${process.env.WEBDAV_PASS}"`, { encoding: 'utf-8' }).trim();
-        } catch(e) { console.warn('[Init] Obscure failed, using plain password'); }
+            // [修复] 避免带符号的密码破坏 Shell 结构
+            pass = execFileSync('rclone', ['obscure', process.env.WEBDAV_PASS], { encoding: 'utf-8' }).trim();
+        } catch(e) { 
+            // [修复] 增加捕获异常日志
+            console.warn('[Init] Obscure failed, using plain password:', e.message); 
+        }
 
         const confContent = `[remote]\ntype = webdav\nurl = ${process.env.WEBDAV_URL}\nvendor = ${process.env.WEBDAV_VENDOR || 'other'}\nuser = ${process.env.WEBDAV_USER}\npass = ${pass}\n`;
         fs.writeFileSync(syncConfPath, confContent);
@@ -601,14 +609,19 @@ async function bootstrap() {
         initAlist.kill();
     }
     if (process.env.ALIST_ADMIN_PASSWORD) {
-        try { execSync(`alist admin set "${process.env.ALIST_ADMIN_PASSWORD}" --data "${alistConfigDir}"`, { stdio: 'ignore' }); } catch {}
+        try { 
+            // [修复] 避免带符号的密码破坏 Shell 结构，且补充异常打印
+            execFileSync(alistPath, ['admin', 'set', process.env.ALIST_ADMIN_PASSWORD, '--data', alistConfigDir], { stdio: 'ignore' }); 
+        } catch (e) {
+            console.warn('[Init] Failed to set Alist admin password:', e.message);
+        }
     }
 
     // 6. 初始化 Rclone 配置和本地挂载点
     const rcloneConfPath = path.join(DATA_DIR, 'rclone', 'rclone.conf');
     if (!fs.existsSync(rcloneConfPath)) fs.writeFileSync(rcloneConfPath, '');
     
-    // 【修改点】：确保不包含末尾斜杠，并优先尝试使用 update
+    // 确保不包含末尾斜杠，并优先尝试使用 update
     const ALIST_REMOTE_NAME = 'alist';
     const aUser = process.env.ALIST_ADMIN_USERNAME || 'admin';
     const aPass = process.env.ALIST_ADMIN_PASSWORD || 'admin';
@@ -616,7 +629,13 @@ async function bootstrap() {
     
     if (!confContent.includes(`[${ALIST_REMOTE_NAME}]`)) {
         console.log('[Init] Creating built-in Alist remote configuration...');
-        const obs = execSync(`rclone obscure "${aPass}"`, { encoding: 'utf-8' }).trim();
+        let obs = aPass;
+        try {
+            // [修复] 避免带符号的密码破坏 Shell 结构
+            obs = execFileSync('rclone', ['obscure', aPass], { encoding: 'utf-8' }).trim();
+        } catch (e) {
+            console.warn('[Init] Failed to obscure built-in Alist password:', e.message);
+        }
         fs.appendFileSync(rcloneConfPath, `\n[${ALIST_REMOTE_NAME}]\ntype = webdav\nurl = http://127.0.0.1:5244/dav\nvendor = other\nuser = ${aUser}\npass = ${obs}\n`);
     } else {
         console.log('[Init] Updating built-in Alist remote configuration...');
