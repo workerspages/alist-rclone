@@ -5,3 +5,6 @@
 data/
 docker-compose.yml
 LICENSE
+
+package.json
+index.js
