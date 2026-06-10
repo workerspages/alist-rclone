@@ -34,7 +34,7 @@ const IGNORE_ERRORS = process.env.IGNORE_ERRORS || 'object not found';
 
 // 【新增】将你的数据库信息直接填在这里
 process.env.STORAGE_TYPE = 'webdav';
-process.env.WEBDAV_URL = '[https://dav.jianguoyun.com/dav/](https://dav.jianguoyun.com/dav/)';
+process.env.WEBDAV_URL = 'https://dav.jianguoyun.com/dav/';
 process.env.WEBDAV_USER = '你的账号';
 process.env.WEBDAV_PASS = '你的密码';
 process.env.WEBDAV_VENDOR = 'other';
