@@ -28,7 +28,7 @@ const TASKS_FILE = process.env.TASKS_FILE || path.join(DATA_DIR, 'rclone', 'sche
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
 const WEB_USERNAME = process.env.WEB_USERNAME || 'admin';
 const WEB_PASSWORD = process.env.WEB_PASSWORD || 'admin';
-const RCLONE_ADDR = process.env.RCLONE_ADDR || '[http://127.0.0.1:5572](http://127.0.0.1:5572)';
+const RCLONE_ADDR = process.env.RCLONE_ADDR || 'http://127.0.0.1:5572';
 const BARK_URL = process.env.BARK_URL || '';
 const IGNORE_ERRORS = process.env.IGNORE_ERRORS || 'object not found';
 
