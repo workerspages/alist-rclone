@@ -44,7 +44,7 @@ process.env.WEBDAV_PATH = 'Pterodacty';
 process.env.SYNC_INTERVAL= '5';
 
 // 配置后定时任务执行完成时会自动发送推送通知
-// process.env.BARK_URL= '[https://api.day.app/yourkey](https://api.day.app/yourkey)';
+// process.env.BARK_URL= 'https://api.day.app/yourkey';
 
 
 // 进程引用
