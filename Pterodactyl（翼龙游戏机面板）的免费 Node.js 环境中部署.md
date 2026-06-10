@@ -38,6 +38,7 @@
 
 确保包含 `http-proxy-middleware` 和 `adm-zip` 等依赖。平台在启动时通常会自动执行 `npm install`。
 
+[package.json](/package.json)
 
 #### 文件二：`index.js`
-
+[package.json](/index.js)
