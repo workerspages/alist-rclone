@@ -410,7 +410,6 @@ app.post('/console-api/rclone/job/stop', authMiddleware, async (req, res) => { t
 // 定时任务管理
 // ========================
 const cronJobs = new Map();
-// [修复] 增加捕获异常日志，防止空 catch 掩盖错误
 function loadTasks() { try { if (fs.existsSync(TASKS_FILE)) return JSON.parse(fs.readFileSync(TASKS_FILE, 'utf-8')); } catch (e) { console.error('[Task] Failed to load tasks:', e.message); } return []; }
 function saveTasks(tasks) { try { fs.writeFileSync(TASKS_FILE, JSON.stringify(tasks, null, 2), 'utf-8'); } catch (e) { console.error('[Task] Failed to save tasks:', e.message); } }
 
@@ -578,10 +577,8 @@ async function bootstrap() {
         console.log('[Init] Setting up WebDAV via config file...');
         let pass = process.env.WEBDAV_PASS;
         try {
-            // [修复] 避免带符号的密码破坏 Shell 结构
             pass = execFileSync('rclone', ['obscure', process.env.WEBDAV_PASS], { encoding: 'utf-8' }).trim();
         } catch(e) { 
-            // [修复] 增加捕获异常日志
             console.warn('[Init] Obscure failed, using plain password:', e.message); 
         }
 
@@ -591,7 +588,6 @@ async function bootstrap() {
         console.log('[Init] Attempting to pull data using permanent config file...');
         try {
             SYNC_DEST = `remote:${process.env.WEBDAV_PATH}`; 
-            // 修复：针对 WebDAV 移除 --checksum 参数，默认使用 size 和 modtime 避免拖慢速度或报错
             execSync(`rclone copy "${SYNC_DEST}" "${DATA_DIR}" --config "${syncConfPath}" -v`, { stdio: 'inherit' });
             console.log('[Init] Restore successful!');
         } catch (e) {
@@ -603,7 +599,7 @@ async function bootstrap() {
     // 5. 初始化 Alist 和配置管理员密码
     const alistConfigDir = path.join(DATA_DIR, 'alist');
 
-    // [新增] 启动时强力清理历史临时文件，释放面板容器的存储空间
+    // 启动时强力清理历史临时文件，释放面板容器的存储空间
     try {
         console.log('[Init] Cleaning up legacy Alist temporary files to free up space...');
         const temp1 = path.join(alistConfigDir, 'temp');
@@ -622,7 +618,6 @@ async function bootstrap() {
     }
     if (process.env.ALIST_ADMIN_PASSWORD) {
         try { 
-            // [修复] 避免带符号的密码破坏 Shell 结构，且补充异常打印
             execFileSync(alistPath, ['admin', 'set', process.env.ALIST_ADMIN_PASSWORD, '--data', alistConfigDir], { stdio: 'ignore' }); 
         } catch (e) {
             console.warn('[Init] Failed to set Alist admin password:', e.message);
@@ -643,7 +638,6 @@ async function bootstrap() {
         console.log('[Init] Creating built-in Alist remote configuration...');
         let obs = aPass;
         try {
-            // [修复] 避免带符号的密码破坏 Shell 结构
             obs = execFileSync('rclone', ['obscure', aPass], { encoding: 'utf-8' }).trim();
         } catch (e) {
             console.warn('[Init] Failed to obscure built-in Alist password:', e.message);
@@ -676,16 +670,38 @@ async function bootstrap() {
     rcloneProcess.stdout.on('data', d => appendLog('rclone', d));
     rcloneProcess.stderr.on('data', d => appendLog('rclone', d));
 
-    // 8. AutoSync 定时备份逻辑
+    // 8. AutoSync 定时备份逻辑（引入双重同步机制，解决 WebDAV 瞎眼问题）
     const syncIntervalMin = parseInt(process.env.SYNC_INTERVAL || '5', 10);
     if (SYNC_DEST && syncIntervalMin > 0) {
         console.log(`[AutoSync] Background backup task scheduled every ${syncIntervalMin} minutes.`);
         setInterval(() => {
             console.log(`[AutoSync] === Pushing updates to remote ===`);
             try {
+                // 1. SQLite WAL Checkpoint (确保所有缓存数据落入主库 data.db)
                 execSync(`sqlite3 "${path.join(alistConfigDir, 'data.db')}" "PRAGMA wal_checkpoint(TRUNCATE);" 2>/dev/null || true`);
-                // [修复] 针对 WebDAV 移除了 --checksum，改为完全信任大小和修改时间；避免因为校验报错回退导致数据库文件无法同步
+                
+                // 2. 第一阶段：针对 WebDAV 无法校验 Hash 和 ModTime 的致命缺陷，强制无条件覆盖核心配置文件！
+                console.log(`[AutoSync] Force pushing critical database and config files...`);
+                // 处理末尾斜杠问题，确保路径拼接正确
+                const safeDest = SYNC_DEST.replace(/\/$/, '');
+                const criticalFiles = [
+                    { src: path.join(alistConfigDir, 'data.db'), dst: `${safeDest}/alist` },
+                    { src: path.join(alistConfigDir, 'config.json'), dst: `${safeDest}/alist` },
+                    { src: path.join(DATA_DIR, 'rclone', 'rclone.conf'), dst: `${safeDest}/rclone` },
+                    { src: path.join(DATA_DIR, 'rclone', 'scheduled-tasks.json'), dst: `${safeDest}/rclone` }
+                ];
+
+                for (const file of criticalFiles) {
+                    if (fs.existsSync(file.src)) {
+                        // 使用 --ignore-times 强制覆盖，完全无视大小和时间戳，确保数据库 100% 更新
+                        execSync(`rclone copy "${file.src}" "${file.dst}" --config "${syncConfPath}" --ignore-times 2>/dev/null || true`);
+                    }
+                }
+
+                // 3. 第二阶段：全局常规同步 (用于同步其他普通的大文件，这部分依靠默认的大小检测就足够了)
+                console.log(`[AutoSync] Syncing other incremental files...`);
                 execSync(`rclone sync "${DATA_DIR}" "${SYNC_DEST}" --config "${syncConfPath}" --exclude "rclone/cache/**" --exclude "alist/data/temp/**" --exclude "alist/temp/**" --exclude "alist/data/bleve/**" --exclude "alist/data/log/**" -v`, { stdio: 'inherit' });
+                
                 console.log(`[AutoSync] Push complete.`);
             } catch (e) { console.error(`[AutoSync] Push failed:`, e.message); }
         }, syncIntervalMin * 60 * 1000);
@@ -696,19 +712,18 @@ async function bootstrap() {
         console.log(`[System] Node.js All-in-One Server is listening on port ${PORT}`);
         initScheduler();
 
-        // [新增] 超激进！针对翼龙容器 716MB 极小磁盘优化的自动定时防爆盘清理机制
+        // 针对翼龙容器 716MB 极小磁盘优化的自动定时防爆盘清理机制
         console.log(`[System] Aggressive background temp files cleanup task scheduled.`);
         setInterval(() => {
             try {
                 const temp1 = path.join(alistConfigDir, 'temp');
                 const temp2 = path.join(alistConfigDir, 'data', 'temp');
-                // 确保目录存在以防 find 报错
                 execSync(`mkdir -p "${temp1}" "${temp2}" 2>/dev/null || true`);
                 // 激进清理：查找并删除超过 10 分钟没有被写入变动的临时文件！
                 execSync(`find "${temp1}" -type f -mmin +10 -delete 2>/dev/null || true`);
                 execSync(`find "${temp2}" -type f -mmin +10 -delete 2>/dev/null || true`);
             } catch (e) {
-                // 忽略执行过程中的错误，避免应用崩溃
+                // 忽略错误，避免崩溃
             }
         }, 3 * 60 * 1000); // 频次拉高：每 3 分钟执行一次！
     });
