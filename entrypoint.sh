@@ -217,8 +217,22 @@ ALIST_USER="${ALIST_ADMIN_USERNAME:-admin}"
 ALIST_PASS="${ALIST_ADMIN_PASSWORD:-admin}"
 
 echo "[Init] Updating built-in Alist remote configuration..."
-# 每次启动强制覆写 Alist 本地连接凭据，防止环境变量修改后不同步
-/usr/bin/rclone config create "$ALIST_REMOTE_NAME" webdav url "http://127.0.0.1:5244/dav" vendor "other" user "$ALIST_USER" pass "$ALIST_PASS" --config /data/rclone/rclone.conf >/dev/null 2>&1
+if ! grep -q "\[$ALIST_REMOTE_NAME\]" /data/rclone/rclone.conf; then
+    # 如果不存在，安全创建
+    OBSCURED_PASS=$(/usr/bin/rclone obscure "$ALIST_PASS")
+    cat >> /data/rclone/rclone.conf <<EOF
+
+[$ALIST_REMOTE_NAME]
+type = webdav
+url = http://127.0.0.1:5244/dav
+vendor = other
+user = $ALIST_USER
+pass = $OBSCURED_PASS
+EOF
+else
+    # 如果已存在，强制使用 update 覆写最新账号密码（注意 url 坚决不带末尾斜杠）
+    /usr/bin/rclone config update "$ALIST_REMOTE_NAME" url "http://127.0.0.1:5244/dav" vendor "other" user "$ALIST_USER" pass "$ALIST_PASS" --config /data/rclone/rclone.conf >/dev/null 2>&1 || true
+fi
 
 HOST_REMOTE_NAME="host"
 if ! grep -q "\[$HOST_REMOTE_NAME\]" /data/rclone/rclone.conf; then
