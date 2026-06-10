@@ -591,7 +591,8 @@ async function bootstrap() {
         console.log('[Init] Attempting to pull data using permanent config file...');
         try {
             SYNC_DEST = `remote:${process.env.WEBDAV_PATH}`; 
-            execSync(`rclone copy "${SYNC_DEST}" "${DATA_DIR}" --config "${syncConfPath}" --checksum -v`, { stdio: 'inherit' });
+            // 修复：针对 WebDAV 移除 --checksum 参数，默认使用 size 和 modtime 避免拖慢速度或报错
+            execSync(`rclone copy "${SYNC_DEST}" "${DATA_DIR}" --config "${syncConfPath}" -v`, { stdio: 'inherit' });
             console.log('[Init] Restore successful!');
         } catch (e) {
             console.error('[FATAL ERROR] Restore failed!', e.message);
@@ -683,7 +684,8 @@ async function bootstrap() {
             console.log(`[AutoSync] === Pushing updates to remote ===`);
             try {
                 execSync(`sqlite3 "${path.join(alistConfigDir, 'data.db')}" "PRAGMA wal_checkpoint(TRUNCATE);" 2>/dev/null || true`);
-                execSync(`rclone sync "${DATA_DIR}" "${SYNC_DEST}" --config "${syncConfPath}" --checksum --exclude "rclone/cache/**" --exclude "alist/data/temp/**" --exclude "alist/temp/**" --exclude "alist/data/bleve/**" --exclude "alist/data/log/**" -v`, { stdio: 'inherit' });
+                // [修复] 针对 WebDAV 移除了 --checksum，改为完全信任大小和修改时间；避免因为校验报错回退导致数据库文件无法同步
+                execSync(`rclone sync "${DATA_DIR}" "${SYNC_DEST}" --config "${syncConfPath}" --exclude "rclone/cache/**" --exclude "alist/data/temp/**" --exclude "alist/temp/**" --exclude "alist/data/bleve/**" --exclude "alist/data/log/**" -v`, { stdio: 'inherit' });
                 console.log(`[AutoSync] Push complete.`);
             } catch (e) { console.error(`[AutoSync] Push failed:`, e.message); }
         }, syncIntervalMin * 60 * 1000);
@@ -694,21 +696,21 @@ async function bootstrap() {
         console.log(`[System] Node.js All-in-One Server is listening on port ${PORT}`);
         initScheduler();
 
-        // [新增] 自动定时清理 Alist 临时文件防爆盘机制
-        console.log(`[System] Background temp files cleanup task scheduled.`);
+        // [新增] 超激进！针对翼龙容器 716MB 极小磁盘优化的自动定时防爆盘清理机制
+        console.log(`[System] Aggressive background temp files cleanup task scheduled.`);
         setInterval(() => {
             try {
                 const temp1 = path.join(alistConfigDir, 'temp');
                 const temp2 = path.join(alistConfigDir, 'data', 'temp');
                 // 确保目录存在以防 find 报错
                 execSync(`mkdir -p "${temp1}" "${temp2}" 2>/dev/null || true`);
-                // 查找并删除修改时间超过 2 小时（120分钟）的临时文件
-                execSync(`find "${temp1}" -type f -mmin +120 -delete 2>/dev/null || true`);
-                execSync(`find "${temp2}" -type f -mmin +120 -delete 2>/dev/null || true`);
+                // 激进清理：查找并删除超过 10 分钟没有被写入变动的临时文件！
+                execSync(`find "${temp1}" -type f -mmin +10 -delete 2>/dev/null || true`);
+                execSync(`find "${temp2}" -type f -mmin +10 -delete 2>/dev/null || true`);
             } catch (e) {
                 // 忽略执行过程中的错误，避免应用崩溃
             }
-        }, 30 * 60 * 1000); // 每 30 分钟执行一次清理
+        }, 3 * 60 * 1000); // 频次拉高：每 3 分钟执行一次！
     });
 }
 
