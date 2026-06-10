@@ -27,6 +27,7 @@
     ├── app.js
     └── update-version.sh
 
+
 ```
 
 ### 步骤 3：上传配置文件和代码
@@ -36,7 +37,28 @@
 #### 文件一：`package.json`
 
 确保包含 `http-proxy-middleware` 和 `adm-zip` 等依赖。平台在启动时通常会自动执行 `npm install`。
+```json
+{
+  "name": "alist-rclone-paas",
+  "version": "1.0.0",
+  "description": "Alist-Rclone All-in-One for Node.js PaaS",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "express-rate-limit": "^8.3.0",
+    "jsonwebtoken": "^9.0.2",
+    "node-cron": "^3.0.3",
+    "uuid": "^9.0.1",
+    "http-proxy-middleware": "^3.0.0",
+    "adm-zip": "^0.5.10"
+  }
+}
+```
 
+#### 文件二：`index.js`
 ```javascript
 process.env.ALIST_ADMIN_PASSWORD = '这里换成你想要的Alist密码';
 process.env.WEB_PASSWORD = '这里换成你想要的控制台密码';
@@ -68,13 +90,13 @@ const TASKS_FILE = process.env.TASKS_FILE || path.join(DATA_DIR, 'rclone', 'sche
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
 const WEB_USERNAME = process.env.WEB_USERNAME || 'admin';
 const WEB_PASSWORD = process.env.WEB_PASSWORD || 'admin';
-const RCLONE_ADDR = process.env.RCLONE_ADDR || 'http://127.0.0.1:5572';
+const RCLONE_ADDR = process.env.RCLONE_ADDR || '[http://127.0.0.1:5572](http://127.0.0.1:5572)';
 const BARK_URL = process.env.BARK_URL || '';
 const IGNORE_ERRORS = process.env.IGNORE_ERRORS || 'object not found';
 
 // 【新增】将你的数据库信息直接填在这里
 process.env.STORAGE_TYPE = 'webdav';
-process.env.WEBDAV_URL = 'https://dav.jianguoyun.com/dav/';
+process.env.WEBDAV_URL = '[https://dav.jianguoyun.com/dav/](https://dav.jianguoyun.com/dav/)';
 process.env.WEBDAV_USER = '你的账号';
 process.env.WEBDAV_PASS = '你的密码';
 process.env.WEBDAV_VENDOR = 'other';
@@ -84,7 +106,7 @@ process.env.WEBDAV_PATH = 'Pterodacty';
 process.env.SYNC_INTERVAL= '5';
 
 // 配置后定时任务执行完成时会自动发送推送通知
-// process.env.BARK_URL= 'https://api.day.app/yourkey';
+// process.env.BARK_URL= '[https://api.day.app/yourkey](https://api.day.app/yourkey)';
 
 
 // 进程引用
@@ -544,7 +566,7 @@ app.use('/console', express.static(path.join(ROOT_DIR, 'web')));
 app.get('/console/*', (req, res) => res.sendFile(path.join(ROOT_DIR, 'web', 'index.html')));
 
 app.use('/', createProxyMiddleware({
-    target: 'http://127.0.0.1:5244',
+    target: '[http://127.0.0.1:5244](http://127.0.0.1:5244)',
     changeOrigin: true,
     ws: true,
     logLevel: 'error'
@@ -588,7 +610,7 @@ async function bootstrap() {
     if (!fs.existsSync(rclonePath)) {
         console.log(`[Init] Downloading Rclone Mod (${arch})...`);
         try {
-            const latestUrl = execSync('curl -w "%{url_effective}" -I -L -s -S -o /dev/null https://github.com/wiserain/rclone/releases/latest', { encoding: 'utf8' }).trim();
+            const latestUrl = execSync('curl -w "%{url_effective}" -I -L -s -S -o /dev/null [https://github.com/wiserain/rclone/releases/latest](https://github.com/wiserain/rclone/releases/latest)', { encoding: 'utf8' }).trim();
             const tag = latestUrl.substring(latestUrl.lastIndexOf('/') + 1) || 'v1.66.0-mod1.6.2';
             const zipFile = path.join(ROOT_DIR, 'rclone.zip');
             execSync(`curl -fsSL "https://github.com/wiserain/rclone/releases/download/${tag}/rclone-${tag}-linux-${arch}.zip" -o "${zipFile}"`, { stdio: 'inherit' });
@@ -647,13 +669,25 @@ async function bootstrap() {
     // 6. 初始化 Rclone 配置和本地挂载点
     const rcloneConfPath = path.join(DATA_DIR, 'rclone', 'rclone.conf');
     if (!fs.existsSync(rcloneConfPath)) fs.writeFileSync(rcloneConfPath, '');
-    let confContent = fs.readFileSync(rcloneConfPath, 'utf8');
-    if (!confContent.includes('[alist]')) {
-        const aUser = process.env.ALIST_ADMIN_USERNAME || 'admin';
-        const aPass = process.env.ALIST_ADMIN_PASSWORD || 'admin';
-        const obs = execSync(`rclone obscure "${aPass}"`, { encoding: 'utf-8' }).trim();
-        fs.appendFileSync(rcloneConfPath, `\n[alist]\ntype = webdav\nurl = http://127.0.0.1:5244/dav\nvendor = other\nuser = ${aUser}\npass = ${obs}\n`);
+    
+    // 【修改点】：每次启动都强制使用当前的环境变量更新 rclone.conf 中的 alist 配置
+    const aUser = process.env.ALIST_ADMIN_USERNAME || 'admin';
+    const aPass = process.env.ALIST_ADMIN_PASSWORD || 'admin';
+    console.log('[Init] Updating built-in Alist remote configuration...');
+    try {
+        await execFilePromise('rclone', [
+            'config', 'create', 'alist', 'webdav',
+            'url', '[http://127.0.0.1:5244/dav](http://127.0.0.1:5244/dav)',
+            'vendor', 'other',
+            'user', aUser,
+            'pass', aPass,
+            '--config', rcloneConfPath
+        ]);
+    } catch (e) {
+        console.error('[Init] Failed to configure built-in Alist remote:', e.message);
     }
+
+    let confContent = fs.readFileSync(rcloneConfPath, 'utf8');
     if (!confContent.includes('[host]')) {
         const hostDir = path.join(ROOT_DIR, 'host');
         if (!fs.existsSync(hostDir)) fs.mkdirSync(hostDir);
@@ -678,7 +712,6 @@ async function bootstrap() {
             console.log(`[AutoSync] === Pushing updates to remote ===`);
             try {
                 execSync(`sqlite3 "${path.join(alistConfigDir, 'data.db')}" "PRAGMA wal_checkpoint(TRUNCATE);" 2>/dev/null || true`);
-                // 【修复点】：在这里为 rclone sync 加上 --config 参数，指明配置文件的确切位置
                 execSync(`rclone sync "${DATA_DIR}" "${SYNC_DEST}" --config "${syncConfPath}" --checksum --exclude "rclone/cache/**" --exclude "alist/data/temp/**" --exclude "alist/temp/**" --exclude "alist/data/bleve/**" --exclude "alist/data/log/**" -v`, { stdio: 'inherit' });
                 console.log(`[AutoSync] Push complete.`);
             } catch (e) { console.error(`[AutoSync] Push failed:`, e.message); }
@@ -694,19 +727,8 @@ async function bootstrap() {
 
 // 引导启动
 bootstrap();
-```
-
-### 步骤 4：配置启动命令和环境变量
-
-由于此类面板容器每次休眠重启都会丢失文件，**强烈建议**在面板的 `Startup` 或 `Environment Variables` (环境变量) 设置处，添加一个 `SYNC_DEST` 变量将数据持久化备份到免费的云存储（具体参数格式可参考你原有的 docker-compose 中的注释）。
-
-同时，如果面板有类似于 **Startup Command (启动命令)** 的选项，请确保它设置为：
-
-```bash
-npm install && npm start
 
 ```
 
-*(如果面板已经内置了自动读取 `package.json` 的机制则无需手动配置。)*
+```
 
-最后点击控制台（Console）右上角的 **Start** 按钮，脚本会在初次启动时自动拉取相关二进制文件并在该平台上完美运行。
