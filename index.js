@@ -504,7 +504,7 @@ app.use('/console', express.static(path.join(ROOT_DIR, 'web')));
 app.get('/console/*', (req, res) => res.sendFile(path.join(ROOT_DIR, 'web', 'index.html')));
 
 app.use('/', createProxyMiddleware({
-    target: '[http://127.0.0.1:5244](http://127.0.0.1:5244)',
+    target: 'http://127.0.0.1:5244',
     changeOrigin: true,
     ws: true,
     logLevel: 'error'
@@ -548,7 +548,7 @@ async function bootstrap() {
     if (!fs.existsSync(rclonePath)) {
         console.log(`[Init] Downloading Rclone Mod (${arch})...`);
         try {
-            const latestUrl = execSync('curl -w "%{url_effective}" -I -L -s -S -o /dev/null [https://github.com/wiserain/rclone/releases/latest](https://github.com/wiserain/rclone/releases/latest)', { encoding: 'utf8' }).trim();
+            const latestUrl = execSync('curl -w "%{url_effective}" -I -L -s -S -o /dev/null https://github.com/wiserain/rclone/releases/latest', { encoding: 'utf8' }).trim();
             const tag = latestUrl.substring(latestUrl.lastIndexOf('/') + 1) || 'v1.66.0-mod1.6.2';
             const zipFile = path.join(ROOT_DIR, 'rclone.zip');
             execSync(`curl -fsSL "https://github.com/wiserain/rclone/releases/download/${tag}/rclone-${tag}-linux-${arch}.zip" -o "${zipFile}"`, { stdio: 'inherit' });
@@ -621,7 +621,7 @@ async function bootstrap() {
     } else {
         console.log('[Init] Updating built-in Alist remote configuration...');
         try {
-            await execFilePromise('rclone', ['config', 'update', ALIST_REMOTE_NAME, 'url', '[http://127.0.0.1:5244/dav](http://127.0.0.1:5244/dav)', 'vendor', 'other', 'user', aUser, 'pass', aPass, '--config', rcloneConfPath]);
+            await execFilePromise('rclone', ['config', 'update', ALIST_REMOTE_NAME, 'url', 'http://127.0.0.1:5244/dav', 'vendor', 'other', 'user', aUser, 'pass', aPass, '--config', rcloneConfPath]);
         } catch (e) {
             console.error('[Init] Failed to update built-in Alist remote:', e.message);
         }
