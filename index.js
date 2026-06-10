@@ -39,7 +39,6 @@ process.env.WEBDAV_URL = 'https://dav.jianguoyun.com/dav/';
 process.env.WEBDAV_USER = '你的账号';
 process.env.WEBDAV_PASS = '你的密码';
 process.env.WEBDAV_VENDOR = 'other';
-// [修复] 补全了翼龙面板英文单词缺失的字母 'l'
 process.env.WEBDAV_PATH = 'Pterodactyl';
 
 // 自动同步外部存储的时间间隔
