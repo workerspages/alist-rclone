@@ -190,6 +190,12 @@ fi
 
 # ---- Initialize Alist ----
 echo "[Init] Initializing Alist..."
+# 强力清理可能从 S3 带来的 SQLite 临时锁文件，防止启动时数据库损坏引发 exit status 1
+if [ -d /data/alist ]; then
+    echo "[Init] Cleaning up residual SQLite WAL files to prevent database locks..."
+    rm -f /data/alist/*.db-wal /data/alist/*.db-shm
+fi
+
 if [ ! -f /data/alist/config.json ]; then
     echo "[Init] First run, creating Alist config (sqlite3)..."
     mkdir -p /data/alist
