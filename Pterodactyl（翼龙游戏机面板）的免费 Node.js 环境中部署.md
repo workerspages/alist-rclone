@@ -670,24 +670,27 @@ async function bootstrap() {
     const rcloneConfPath = path.join(DATA_DIR, 'rclone', 'rclone.conf');
     if (!fs.existsSync(rcloneConfPath)) fs.writeFileSync(rcloneConfPath, '');
     
-    // 【修改点】：每次启动都强制使用当前的环境变量更新 rclone.conf 中的 alist 配置
+    // 【修改点】：确保不包含末尾斜杠，并优先尝试使用 update
+    const ALIST_REMOTE_NAME = 'alist';
     const aUser = process.env.ALIST_ADMIN_USERNAME || 'admin';
     const aPass = process.env.ALIST_ADMIN_PASSWORD || 'admin';
-    console.log('[Init] Updating built-in Alist remote configuration...');
-    try {
-        await execFilePromise('rclone', [
-            'config', 'create', 'alist', 'webdav',
-            'url', '[http://127.0.0.1:5244/dav](http://127.0.0.1:5244/dav)',
-            'vendor', 'other',
-            'user', aUser,
-            'pass', aPass,
-            '--config', rcloneConfPath
-        ]);
-    } catch (e) {
-        console.error('[Init] Failed to configure built-in Alist remote:', e.message);
-    }
-
     let confContent = fs.readFileSync(rcloneConfPath, 'utf8');
+    
+    if (!confContent.includes(`[${ALIST_REMOTE_NAME}]`)) {
+        console.log('[Init] Creating built-in Alist remote configuration...');
+        const obs = execSync(`rclone obscure "${aPass}"`, { encoding: 'utf-8' }).trim();
+        fs.appendFileSync(rcloneConfPath, `\n[${ALIST_REMOTE_NAME}]\ntype = webdav\nurl = http://127.0.0.1:5244/dav\nvendor = other\nuser = ${aUser}\npass = ${obs}\n`);
+    } else {
+        console.log('[Init] Updating built-in Alist remote configuration...');
+        try {
+            await execFilePromise('rclone', ['config', 'update', ALIST_REMOTE_NAME, 'url', '[http://127.0.0.1:5244/dav](http://127.0.0.1:5244/dav)', 'vendor', 'other', 'user', aUser, 'pass', aPass, '--config', rcloneConfPath]);
+        } catch (e) {
+            console.error('[Init] Failed to update built-in Alist remote:', e.message);
+        }
+    }
+    
+    // 重新加载配置内容以检查 host
+    confContent = fs.readFileSync(rcloneConfPath, 'utf8');
     if (!confContent.includes('[host]')) {
         const hostDir = path.join(ROOT_DIR, 'host');
         if (!fs.existsSync(hostDir)) fs.mkdirSync(hostDir);
