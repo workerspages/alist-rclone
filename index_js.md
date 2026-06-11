@@ -1,4 +1,5 @@
-#### `databricks` 专用
+### `Databricks` 专用
+[Databricks 官网](https://www.databricks.com/)
 
 ```javascript
 process.env.ALIST_ADMIN_PASSWORD = '这里换成你想要的Alist密码';
