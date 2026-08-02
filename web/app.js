@@ -505,17 +505,22 @@ const App = {
                 { name: 'secret_access_key', label: 'Secret Access Key', placeholder: '密钥', sensitive: true },
                 { name: 'region', label: '区域 (Region)', placeholder: 'us-east-1' },
                 { name: 'endpoint', label: '服务地址 (Endpoint)', placeholder: '例如: https://s3.example.com (留空使用默认)' },
+                { name: 'force_path_style', label: '强制路径样式', type: 'select', options: [{value: '', label: '默认'}, {value: 'true', label: '是 (True)'}, {value: 'false', label: '否 (False)'}] },
             ],
             drive: [
                 { name: 'client_id', label: 'Client ID', placeholder: '留空使用内置' },
                 { name: 'client_secret', label: 'Client Secret', placeholder: '留空使用内置', sensitive: true },
+                { name: 'token', label: '刷新令牌 (Refresh Token)', type: 'textarea', placeholder: '{"access_token":"...","token_type":"Bearer",...}' },
                 { name: 'root_folder_id', label: '根目录 ID', placeholder: '留空为根目录' },
+                { name: 'team_drive', label: '团队盘 ID (Team Drive)', placeholder: '留空为个人盘' },
                 { name: 'service_account_file', label: 'SA 文件路径', placeholder: '/data/sa.json' },
             ],
             onedrive: [
                 { name: 'client_id', label: 'Client ID', placeholder: '' },
                 { name: 'client_secret', label: 'Client Secret', placeholder: '', sensitive: true },
                 { name: 'token', label: 'Token (JSON)', type: 'textarea', placeholder: '{"access_token":"...","token_type":"Bearer",...}' },
+                { name: 'drive_id', label: '驱动器 ID (Drive ID)', placeholder: '留空使用默认' },
+                { name: 'drive_type', label: '驱动器类型 (Drive Type)', type: 'select', options: [{value: '', label: '自动'}, {value: 'personal', label: '个人 (Personal)'}, {value: 'business', label: '商业版 (Business)'}, {value: 'documentLibrary', label: 'SharePoint'}] },
             ],
             webdav: [
                 { name: 'url', label: '服务器 URL', placeholder: 'https://example.com/remote.php/dav/files/user/' },
@@ -566,10 +571,14 @@ const App = {
                 { name: 'pass', label: '密码', placeholder: '', sensitive: true },
             ],
             pcloud: [
-                { name: 'token', label: 'Token (JSON)', type: 'textarea', placeholder: '' },
+                { name: 'username', label: '用户名 (邮箱)', placeholder: '' },
+                { name: 'password', label: '密码', placeholder: '', sensitive: true },
+                { name: 'hostname', label: '服务器 API', type: 'select', options: [{value: '', label: '默认'}, {value: 'api.pcloud.com', label: 'Global'}, {value: 'eapi.pcloud.com', label: 'Europe'}] },
+                { name: 'token', label: 'Token (JSON)', type: 'textarea', placeholder: '如果有 Token 则无需填写账密' },
             ],
             smb: [
                 { name: 'host', label: '主机地址', placeholder: '192.168.1.100' },
+                { name: 'port', label: '端口', placeholder: '445' },
                 { name: 'user', label: '用户名', placeholder: '' },
                 { name: 'pass', label: '密码', placeholder: '', sensitive: true },
                 { name: 'domain', label: '域', placeholder: 'WORKGROUP' },
