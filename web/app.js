@@ -1383,7 +1383,7 @@ const App = {
 
     fmOpenFile(filePath, isVideo) {
         const fsStr = this.fmRemoteName + ':';
-        const url = '/console-api/rclone/serve?fs=' + encodeURIComponent(fsStr) + '&path=' + encodeURIComponent(filePath) + '&token=' + localStorage.getItem('token');
+        const url = '/console-api/rclone/serve?fs=' + encodeURIComponent(fsStr) + '&path=' + encodeURIComponent(filePath) + '&token=' + localStorage.getItem('auth_token');
         if (isVideo) {
             const win = window.open('', '_blank');
             if (win) {
