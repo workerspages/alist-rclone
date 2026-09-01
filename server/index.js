@@ -450,6 +450,41 @@ app.post('/api/rclone/delete', authMiddleware, async (req, res) => {
   }
 });
 
+app.get('/api/rclone/serve', (req, res) => {
+  const token = req.query.token;
+  if (!token) return res.status(401).send('Unauthorized');
+  try { jwt.verify(token, JWT_SECRET); } catch { return res.status(401).send('Unauthorized'); }
+
+  const fsStr = req.query.fs;
+  const remotePath = req.query.path || '';
+  if (!fsStr) return res.status(400).send('fs is required');
+
+  const fsName = fsStr.replace(/:$/, '');
+  const encodedPath = remotePath.split('/').map(encodeURIComponent).join('/');
+  const targetPath = `/[${fsName}:]/${encodedPath}`;
+
+  const options = {
+    hostname: '127.0.0.1',
+    port: 5572,
+    path: targetPath,
+    method: req.method,
+    headers: { ...req.headers }
+  };
+  options.headers['host'] = '127.0.0.1:5572';
+  delete options.headers['connection'];
+
+  const proxyReq = http.request(options, (proxyRes) => {
+    res.writeHead(proxyRes.statusCode, proxyRes.headers);
+    proxyRes.pipe(res, { end: true });
+  });
+
+  proxyReq.on('error', (err) => {
+    if (!res.headersSent) res.status(500).send('Proxy error: ' + err.message);
+  });
+
+  req.pipe(proxyReq, { end: true });
+});
+
 // Copy files between remotes
 app.post('/api/rclone/copy', authMiddleware, async (req, res) => {
   try {
