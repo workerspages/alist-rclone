@@ -1328,12 +1328,25 @@ const App = {
                 const itemPath = item.Path || item.Name;
                 const dirOnClick = item.IsDir ? `onclick="App.fmNavigateTo('/${this.escapeJsArgs(itemPath)}')"` : '';
                 const cls = item.IsDir ? 'fm-file-row fm-dir' : 'fm-file-row';
+                let openBtn = '';
+                if (!item.IsDir) {
+                    const isVideo = /\.(mp4|mkv|avi|mov|webm|flv)$/i.test(item.Name);
+                    const btnTitle = isVideo ? '播放视频' : '打开文件';
+                    const svg = isVideo 
+                        ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>` 
+                        : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>`;
+                    openBtn = `
+                        <button class="btn-icon fm-open-btn" onclick="event.stopPropagation(); App.fmOpenFile('${this.escapeJsArgs(itemPath)}', ${isVideo})" title="${btnTitle}" style="margin-right: 8px;">
+                            ${svg}
+                        </button>`;
+                }
                 return `<div class="${cls}" ${dirOnClick}>
                     <span class="fm-file-icon">${icon}</span>
                     <span class="fm-file-name" title="${this.escapeHtml(item.Name)}">${this.escapeHtml(item.Name)}</span>
                     <span class="fm-file-size">${size}</span>
                     <span class="fm-file-time">${modTime}</span>
                     <span class="fm-file-actions">
+                        ${openBtn}
                         <button class="btn-icon fm-delete-btn" onclick="event.stopPropagation(); App.fmDeleteItem('${this.escapeJsArgs(itemPath)}', '${this.escapeJsArgs(item.Name)}', ${item.IsDir})" title="删除">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                         </button>
@@ -1366,6 +1379,22 @@ const App = {
 
     fmRefresh() {
         this.loadFmDir();
+    },
+
+    fmOpenFile(filePath, isVideo) {
+        const fsStr = this.fmRemoteName + ':';
+        const url = '/console-api/rclone/serve?fs=' + encodeURIComponent(fsStr) + '&path=' + encodeURIComponent(filePath) + '&token=' + localStorage.getItem('token');
+        if (isVideo) {
+            const win = window.open('', '_blank');
+            if (win) {
+                win.document.write(`<html><head><title>播放 - ${this.escapeHtml(filePath)}</title><style>body{margin:0;background:#000;display:flex;justify-content:center;align-items:center;height:100vh;} video{max-width:100%;max-height:100%;outline:none;}</style></head><body><video controls autoplay name="media"><source src="${url}"></video></body></html>`);
+                win.document.close();
+            } else {
+                this.toast('请允许弹出窗口以播放视频', 'error');
+            }
+        } else {
+            window.open(url, '_blank');
+        }
     },
 
     async fmCreateDir() {

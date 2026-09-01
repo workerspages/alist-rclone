@@ -406,6 +406,40 @@ app.get('/console-api/rclone/jobs', authMiddleware, async (req, res) => { try { 
 app.get('/console-api/rclone/job/:id', authMiddleware, async (req, res) => { try { res.json(await rcloneRC('/job/status', { jobid: parseInt(req.params.id) })); } catch (err) { res.status(500).json({ error: err.message }); } });
 app.post('/console-api/rclone/job/stop', authMiddleware, async (req, res) => { try { res.json(await rcloneRC('/job/stop', { jobid: req.body.jobid })); } catch (err) { res.status(500).json({ error: err.message }); } });
 
+app.get('/console-api/rclone/serve', (req, res) => {
+    const token = req.query.token;
+    if (!token) return res.status(401).send('Unauthorized');
+    try { jwt.verify(token, JWT_SECRET); } catch { return res.status(401).send('Unauthorized'); }
+
+    const fsStr = req.query.fs;
+    const remotePath = req.query.path || '';
+    if (!fsStr) return res.status(400).send('fs is required');
+
+    const fsName = fsStr.replace(/:$/, '');
+    const encodedPath = remotePath.split('/').map(encodeURIComponent).join('/');
+    const targetPath = `/[${fsName}:]/${encodedPath}`;
+
+    const options = {
+        hostname: '127.0.0.1',
+        port: 5572,
+        path: targetPath,
+        method: req.method,
+        headers: { ...req.headers }
+    };
+    options.headers['host'] = '127.0.0.1:5572';
+    delete options.headers['connection'];
+
+    const proxyReq = http.request(options, (proxyRes) => {
+        res.writeHead(proxyRes.statusCode, proxyRes.headers);
+        proxyRes.pipe(res, { end: true });
+    });
+
+    proxyReq.on('error', (err) => {
+        if (!res.headersSent) res.status(500).send('Proxy error: ' + err.message);
+    });
+
+    req.pipe(proxyReq, { end: true });
+});
 // ========================
 // 定时任务管理
 // ========================
