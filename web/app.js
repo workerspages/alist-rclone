@@ -878,9 +878,12 @@ const App = {
         const flt = advancedOptions._filter || {};
         const order = advancedOptions._order;
         
+        // Check if a value needs quoting (contains special/glob/path characters)
+        const needsQuoting = (s) => /[\s*?{}\[\]!\/\\]/.test(String(s));
+
         const formatValue = (flag, v) => {
             if (v === true) return flag;
-            const valStr = String(v).includes(' ') ? `"${v}"` : String(v);
+            const valStr = needsQuoting(v) ? `"${v}"` : String(v);
             return `${flag} ${valStr}`;
         };
         
@@ -899,7 +902,7 @@ const App = {
                         const flagName = toKebab(entry.key.replace('Rule', ''));
                         const idx = entry.index !== undefined ? entry.index : 0;
                         if (idx < v.length) {
-                            const valStr = v[idx].includes(' ') ? `"${v[idx]}"` : v[idx];
+                            const valStr = needsQuoting(v[idx]) ? `"${v[idx]}"` : v[idx];
                             args.push(`--${flagName} ${valStr}`);
                         }
                     } else {
@@ -919,7 +922,7 @@ const App = {
             if (k.endsWith('Rule') && Array.isArray(v)) {
                 const flagName = toKebab(k.replace('Rule', ''));
                 v.forEach(rule => {
-                    const valStr = rule.includes(' ') ? `"${rule}"` : rule;
+                    const valStr = needsQuoting(rule) ? `"${rule}"` : rule;
                     args.push(`--${flagName} ${valStr}`);
                 });
             } else {
